@@ -270,24 +270,24 @@ const Header = () => {
     </header>
 
     {/* Buttons underneath navbar - desktop: liquid, mobile: floating */}
-    <div className="hidden md:block fixed top-28 md:top-36 left-6 z-40">
-      <div className="flex gap-4">
+    <div className="hidden md:block fixed top-28 md:top-36 right-6 z-40">
+      <div className="flex gap-3">
         <button 
           onClick={() => setEligibilityDialogOpen(true)}
-          className="relative font-body font-light text-sm text-white border-2 border-white px-8 py-2 rounded-full overflow-hidden group backdrop-blur-md"
-          style={{ backgroundColor: 'rgba(42, 61, 58, 0.7)' }}
+          className="relative font-body font-light text-xs text-white/70 border border-white/30 px-6 py-1.5 rounded-full overflow-hidden group backdrop-blur-sm"
+          style={{ backgroundColor: 'rgba(255, 255, 255, 0.23)' }}
         >
           <span className="relative z-10">Eligibility Check</span>
-          <span className="absolute inset-0 bg-white/0 group-hover:bg-white/20 transition-all duration-500 ease-out transform scale-x-0 group-hover:scale-x-100 origin-left"></span>
-          <span className="absolute inset-0 bg-gradient-to-r from-transparent via-white/30 to-transparent translate-x-[-200%] group-hover:translate-x-[200%] transition-transform duration-1000 ease-in-out"></span>
+          <span className="absolute inset-0 bg-white/0 group-hover:bg-white/10 transition-all duration-700 ease-out"></span>
+          <span className="absolute inset-0 bg-gradient-to-r from-transparent via-white/20 to-transparent translate-x-[-200%] group-hover:translate-x-[200%] transition-transform duration-1200 ease-in-out"></span>
         </button>
         <button 
-          className="relative font-body font-light text-sm text-white border-2 border-white px-8 py-2 rounded-full overflow-hidden group backdrop-blur-md"
-          style={{ backgroundColor: 'rgba(42, 61, 58, 0.7)' }}
+          className="relative font-body font-light text-xs text-white/70 border border-white/30 px-6 py-1.5 rounded-full overflow-hidden group backdrop-blur-sm"
+          style={{ backgroundColor: 'rgba(255, 255, 255, 0.23)' }}
         >
           <span className="relative z-10">Patient Sign-In</span>
-          <span className="absolute inset-0 bg-white/0 group-hover:bg-white/20 transition-all duration-500 ease-out transform scale-x-0 group-hover:scale-x-100 origin-left"></span>
-          <span className="absolute inset-0 bg-gradient-to-r from-transparent via-white/30 to-transparent translate-x-[-200%] group-hover:translate-x-[200%] transition-transform duration-1000 ease-in-out"></span>
+          <span className="absolute inset-0 bg-white/0 group-hover:bg-white/10 transition-all duration-700 ease-out"></span>
+          <span className="absolute inset-0 bg-gradient-to-r from-transparent via-white/20 to-transparent translate-x-[-200%] group-hover:translate-x-[200%] transition-transform duration-1200 ease-in-out"></span>
         </button>
       </div>
     </div>
