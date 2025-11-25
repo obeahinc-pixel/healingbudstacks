@@ -29,10 +29,17 @@ export default {
         primary: {
           DEFAULT: "hsl(var(--primary))",
           foreground: "hsl(var(--primary-foreground))",
+          green: "hsl(var(--primary-green))",
         },
         secondary: {
           DEFAULT: "hsl(var(--secondary))",
           foreground: "hsl(var(--secondary-foreground))",
+          green: "hsl(var(--secondary-green))",
+        },
+        accent: {
+          DEFAULT: "hsl(var(--accent))",
+          foreground: "hsl(var(--accent-foreground))",
+          green: "hsl(var(--accent-green))",
         },
         destructive: {
           DEFAULT: "hsl(var(--destructive))",
@@ -42,10 +49,6 @@ export default {
           DEFAULT: "hsl(var(--muted))",
           foreground: "hsl(var(--muted-foreground))",
         },
-        accent: {
-          DEFAULT: "hsl(var(--accent))",
-          foreground: "hsl(var(--accent-foreground))",
-        },
         popover: {
           DEFAULT: "hsl(var(--popover))",
           foreground: "hsl(var(--popover-foreground))",
@@ -53,6 +56,14 @@ export default {
         card: {
           DEFAULT: "hsl(var(--card))",
           foreground: "hsl(var(--card-foreground))",
+        },
+        brand: {
+          'primary-green': "hsl(var(--primary-green))",
+          'secondary-green': "hsl(var(--secondary-green))",
+          'accent-green': "hsl(var(--accent-green))",
+          'text-light': "hsl(var(--text-light))",
+          'light-gray': "hsl(var(--light-gray))",
+          'subtle-dark': "hsl(var(--subtle-dark))",
         },
         pharma: {
           charcoal: "hsl(var(--pharma-charcoal))",

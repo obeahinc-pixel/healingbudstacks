@@ -221,14 +221,21 @@ All colors MUST be HSL.
     @apply border-border/60 translate-y-[-1px];
   }
   
-  /* Clean button style */
-  .btn-linear {
-    @apply px-5 py-2.5 rounded-lg font-medium transition-all duration-150;
-    box-shadow: var(--shadow-xs);
+  /* Clean button styles with accent green */
+  .btn-primary {
+    @apply px-5 py-2.5 rounded-lg font-medium transition-all duration-300 bg-primary text-primary-foreground hover:bg-primary/90 hover:shadow-lg hover:scale-105;
   }
   
-  .btn-linear:hover {
-    box-shadow: var(--shadow-sm);
+  .btn-secondary {
+    @apply px-5 py-2.5 rounded-lg font-medium transition-all duration-300 bg-secondary text-secondary-foreground hover:bg-secondary/80 hover:shadow-md;
+  }
+  
+  .btn-outline {
+    @apply px-5 py-2.5 rounded-lg font-medium transition-all duration-300 border-2 border-primary/30 text-primary hover:bg-primary/10 hover:border-primary/50 hover:shadow-md;
+  }
+  
+  .btn-ghost {
+    @apply px-5 py-2.5 rounded-lg font-medium transition-all duration-300 text-primary hover:bg-primary/10;
   }
   
   /* Subtle shadow utilities */
@@ -243,6 +250,17 @@ All colors MUST be HSL.
   /* Linear-style surface */
   .surface {
     @apply bg-background/50 backdrop-blur-sm border border-border/30 rounded-xl;
+  }
+  
+  /* Accent green glow effects */
+  .glow-accent {
+    @apply shadow-lg;
+    box-shadow: 0 0 20px rgba(77, 191, 161, 0.3);
+  }
+  
+  .glow-accent-strong {
+    @apply shadow-xl;
+    box-shadow: 0 0 30px rgba(77, 191, 161, 0.5);
   }
 }
 

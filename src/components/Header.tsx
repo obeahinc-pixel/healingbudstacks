@@ -151,32 +151,32 @@ const Header = () => {
             <div className="flex items-center gap-3 ml-4 pl-4 border-l border-white/20">
               <button 
                 onClick={() => setEligibilityDialogOpen(true)}
-                className="font-body font-normal text-sm text-white px-5 py-2 rounded-full transition-all duration-300"
+                className="font-body font-normal text-sm text-white px-5 py-2 rounded-full transition-all duration-300 hover:scale-105 hover:shadow-lg"
                 style={{ 
-                  backgroundColor: 'rgba(77, 166, 169, 0.3)',
+                  backgroundColor: 'rgba(77, 191, 161, 0.25)',
                 }}
                 onMouseEnter={(e) => {
-                  e.currentTarget.style.backgroundColor = 'rgba(77, 166, 169, 0.4)';
-                  e.currentTarget.style.boxShadow = '0 0 15px rgba(77, 166, 169, 0.35)';
+                  e.currentTarget.style.backgroundColor = 'rgba(77, 191, 161, 0.35)';
+                  e.currentTarget.style.boxShadow = '0 0 20px rgba(77, 191, 161, 0.4)';
                 }}
                 onMouseLeave={(e) => {
-                  e.currentTarget.style.backgroundColor = 'rgba(77, 166, 169, 0.3)';
+                  e.currentTarget.style.backgroundColor = 'rgba(77, 191, 161, 0.25)';
                   e.currentTarget.style.boxShadow = 'none';
                 }}
               >
                 Check Eligibility
               </button>
               <button 
-                className="font-body font-normal text-sm text-white px-5 py-2 rounded-full transition-all duration-300"
+                className="font-body font-normal text-sm text-white px-5 py-2 rounded-full transition-all duration-300 hover:scale-105 hover:shadow-lg"
                 style={{ 
-                  backgroundColor: 'rgba(77, 166, 169, 0.3)',
+                  backgroundColor: 'rgba(77, 191, 161, 0.25)',
                 }}
                 onMouseEnter={(e) => {
-                  e.currentTarget.style.backgroundColor = 'rgba(77, 166, 169, 0.4)';
-                  e.currentTarget.style.boxShadow = '0 0 15px rgba(77, 166, 169, 0.35)';
+                  e.currentTarget.style.backgroundColor = 'rgba(77, 191, 161, 0.35)';
+                  e.currentTarget.style.boxShadow = '0 0 20px rgba(77, 191, 161, 0.4)';
                 }}
                 onMouseLeave={(e) => {
-                  e.currentTarget.style.backgroundColor = 'rgba(77, 166, 169, 0.3)';
+                  e.currentTarget.style.backgroundColor = 'rgba(77, 191, 161, 0.25)';
                   e.currentTarget.style.boxShadow = 'none';
                 }}
               >
@@ -291,7 +291,7 @@ const Header = () => {
                 }}
                 className="w-full font-body font-normal text-sm text-white px-5 py-3 rounded-full transition-all duration-300 active:scale-95"
                 style={{ 
-                  backgroundColor: 'rgba(77, 166, 169, 0.3)',
+                  backgroundColor: 'rgba(77, 191, 161, 0.25)',
                 }}
               >
                 Check Eligibility
@@ -299,7 +299,7 @@ const Header = () => {
               <button 
                 className="w-full font-body font-normal text-sm text-white px-5 py-3 rounded-full transition-all duration-300 active:scale-95"
                 style={{ 
-                  backgroundColor: 'rgba(77, 166, 169, 0.3)',
+                  backgroundColor: 'rgba(77, 191, 161, 0.25)',
                 }}
               >
                 Login
