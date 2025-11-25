@@ -183,51 +183,7 @@ const Header = () => {
               Contact Us
             </Link>
 
-            {/* Desktop Action Buttons */}
-            <div className={cn(
-              "flex items-center border-l border-white/20 transition-all duration-500 ease-out",
-              scrolled ? "gap-2 ml-3 pl-3" : "gap-3 ml-4 pl-4"
-            )}>
-              <button 
-                onClick={() => setEligibilityDialogOpen(true)}
-                className={cn(
-                  "font-body font-normal text-white rounded-full transition-all duration-300 hover:scale-105 hover:shadow-lg",
-                  scrolled ? "text-xs px-4 py-1.5" : "text-sm px-5 py-2"
-                )}
-                style={{ 
-                  backgroundColor: 'rgba(77, 191, 161, 0.25)',
-                }}
-                onMouseEnter={(e) => {
-                  e.currentTarget.style.backgroundColor = 'rgba(77, 191, 161, 0.35)';
-                  e.currentTarget.style.boxShadow = '0 0 20px rgba(77, 191, 161, 0.4)';
-                }}
-                onMouseLeave={(e) => {
-                  e.currentTarget.style.backgroundColor = 'rgba(77, 191, 161, 0.25)';
-                  e.currentTarget.style.boxShadow = 'none';
-                }}
-              >
-                Check Eligibility
-              </button>
-              <button 
-                className={cn(
-                  "font-body font-normal text-white rounded-full transition-all duration-300 hover:scale-105 hover:shadow-lg",
-                  scrolled ? "text-xs px-4 py-1.5" : "text-sm px-5 py-2"
-                )}
-                style={{ 
-                  backgroundColor: 'rgba(77, 191, 161, 0.25)',
-                }}
-                onMouseEnter={(e) => {
-                  e.currentTarget.style.backgroundColor = 'rgba(77, 191, 161, 0.35)';
-                  e.currentTarget.style.boxShadow = '0 0 20px rgba(77, 191, 161, 0.4)';
-                }}
-                onMouseLeave={(e) => {
-                  e.currentTarget.style.backgroundColor = 'rgba(77, 191, 161, 0.25)';
-                  e.currentTarget.style.boxShadow = 'none';
-                }}
-              >
-                Login
-              </button>
-            </div>
+            {/* Desktop Action Buttons - Removed, moved to bottom */}
           </nav>
 
           {/* Eligibility Dialog */}
@@ -253,50 +209,50 @@ const Header = () => {
         {/* Mobile Navigation */}
         <nav 
           className={cn(
-            "md:hidden overflow-hidden transition-all duration-300 ease-in-out border-t border-white/10",
-            mobileMenuOpen ? "max-h-[600px] py-6 opacity-100" : "max-h-0 py-0 opacity-0"
+            "md:hidden overflow-y-auto max-h-[calc(100vh-140px)] transition-all duration-300 ease-in-out border-t border-white/10",
+            mobileMenuOpen ? "py-4 opacity-100" : "max-h-0 py-0 opacity-0"
           )}
         >
-          <div className="flex flex-col space-y-4">
-            <div className="space-y-2">
+          <div className="flex flex-col space-y-3 px-2">
+            <div className="space-y-1.5">
               <div className={cn(
-                "font-normal text-base py-2",
-                isWhatWeDoActive ? "text-white font-semibold" : "text-white/80"
+                "font-normal text-sm py-1.5 font-semibold",
+                isWhatWeDoActive ? "text-white" : "text-white/80"
               )}>
                 What We Do
               </div>
-              <div className="pl-4 space-y-2 border-l-2 border-white/20">
+              <div className="pl-3 space-y-1 border-l-2 border-white/20">
                 <Link 
                   to="/cultivating-processing" 
-                  className="block text-sm text-white/80 hover:text-white py-1.5 transition-colors"
+                  className="block text-xs text-white/80 hover:text-white py-1 transition-colors"
                   onClick={() => setMobileMenuOpen(false)}
                 >
                   Cultivating & Processing
                 </Link>
                 <Link 
                   to="/manufacture-distribution" 
-                  className="block text-sm text-white/80 hover:text-white py-1.5 transition-colors"
+                  className="block text-xs text-white/80 hover:text-white py-1 transition-colors"
                   onClick={() => setMobileMenuOpen(false)}
                 >
                   Manufacture & Distribution
                 </Link>
                 <Link 
                   to="/conditions" 
-                  className="block text-sm text-white/80 hover:text-white py-1.5 transition-colors"
+                  className="block text-xs text-white/80 hover:text-white py-1 transition-colors"
                   onClick={() => setMobileMenuOpen(false)}
                 >
                   Conditions
                 </Link>
                 <Link 
                   to="/medical-clinics" 
-                  className="block text-sm text-white/80 hover:text-white py-1.5 transition-colors"
+                  className="block text-xs text-white/80 hover:text-white py-1 transition-colors"
                   onClick={() => setMobileMenuOpen(false)}
                 >
                   Medical Cannabis Clinics
                 </Link>
                 <Link 
                   to="/online-pharmacy" 
-                  className="block text-sm text-white/80 hover:text-white py-1.5 transition-colors"
+                  className="block text-xs text-white/80 hover:text-white py-1 transition-colors"
                   onClick={() => setMobileMenuOpen(false)}
                 >
                   Online Medical Cannabis Pharmacy
@@ -306,7 +262,7 @@ const Header = () => {
             <Link 
               to="/research" 
               className={cn(
-                "font-normal text-base transition-all duration-200 py-2",
+                "font-normal text-sm transition-all duration-200 py-1.5",
                 isActive("/research") ? "text-white font-semibold" : "text-white/80 hover:text-white"
               )}
               onClick={() => setMobileMenuOpen(false)}
@@ -316,7 +272,7 @@ const Header = () => {
             <Link 
               to="/about-us" 
               className={cn(
-                "font-normal text-base transition-all duration-200 py-2",
+                "font-normal text-sm transition-all duration-200 py-1.5",
                 isActive("/about-us") ? "text-white font-semibold" : "text-white/80 hover:text-white"
               )}
               onClick={() => setMobileMenuOpen(false)}
@@ -326,7 +282,7 @@ const Header = () => {
             <Link 
               to="/contact" 
               className={cn(
-                "font-normal text-base transition-all duration-200 py-2",
+                "font-normal text-sm transition-all duration-200 py-1.5",
                 isActive("/contact") ? "text-white font-semibold" : "text-white/80 hover:text-white"
               )}
               onClick={() => setMobileMenuOpen(false)}
@@ -334,29 +290,7 @@ const Header = () => {
               Contact Us
             </Link>
             
-            {/* Mobile Action Buttons */}
-            <div className="pt-4 space-y-3 border-t border-white/20 mt-4">
-              <button 
-                onClick={() => {
-                  setMobileMenuOpen(false);
-                  setEligibilityDialogOpen(true);
-                }}
-                className="w-full font-body font-normal text-sm text-white px-5 py-3 rounded-full transition-all duration-300 active:scale-95"
-                style={{ 
-                  backgroundColor: 'rgba(77, 191, 161, 0.25)',
-                }}
-              >
-                Check Eligibility
-              </button>
-              <button 
-                className="w-full font-body font-normal text-sm text-white px-5 py-3 rounded-full transition-all duration-300 active:scale-95"
-                style={{ 
-                  backgroundColor: 'rgba(77, 191, 161, 0.25)',
-                }}
-              >
-                Login
-              </button>
-            </div>
+            {/* Mobile Action Buttons - Removed, moved to bottom */}
           </div>
         </nav>
       </div>

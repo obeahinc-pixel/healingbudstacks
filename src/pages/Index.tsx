@@ -8,6 +8,7 @@ import News from "@/components/News";
 import Footer from "@/components/Footer";
 import PageTransition from "@/components/PageTransition";
 import BackToTop from "@/components/BackToTop";
+import MobileBottomActions from "@/components/MobileBottomActions";
 import { useState, useEffect } from "react";
 
 const Index = () => {
@@ -28,7 +29,7 @@ const Index = () => {
 
   return (
     <PageTransition>
-      <div className="min-h-screen bg-background">
+      <div className="min-h-screen bg-background pb-20 md:pb-0">
         <Header />
         {/* Dynamic scroll-based fade overlay from hero bottom */}
         <div 
@@ -45,6 +46,7 @@ const Index = () => {
         </main>
         <Footer />
         <BackToTop />
+        <MobileBottomActions />
       </div>
     </PageTransition>
   );
