@@ -2,6 +2,7 @@ import Header from "@/components/Header";
 import Footer from "@/components/Footer";
 import PageTransition from "@/components/PageTransition";
 import ScrollAnimation from "@/components/ScrollAnimation";
+import BackToTop from "@/components/BackToTop";
 import { Target, Heart, Globe, Shield } from "lucide-react";
 import { Link } from "react-router-dom";
 import greenhouseImage from "@/assets/greenhouse-exterior-hq.jpg";
@@ -167,6 +168,7 @@ const AboutUs = () => {
         </section>
       </main>
       <Footer />
+      <BackToTop />
       </div>
     </PageTransition>
   );

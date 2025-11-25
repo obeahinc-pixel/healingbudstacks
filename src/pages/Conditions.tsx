@@ -2,6 +2,7 @@ import Header from "@/components/Header";
 import Footer from "@/components/Footer";
 import PageTransition from "@/components/PageTransition";
 import ScrollAnimation from "@/components/ScrollAnimation";
+import BackToTop from "@/components/BackToTop";
 import { Search } from "lucide-react";
 import { useState } from "react";
 import { Link } from "react-router-dom";
@@ -218,6 +219,7 @@ const Conditions = () => {
           </section>
         </main>
         <Footer />
+        <BackToTop />
       </div>
     </PageTransition>
   );

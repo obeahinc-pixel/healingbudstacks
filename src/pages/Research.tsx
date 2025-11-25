@@ -2,6 +2,7 @@ import Header from "@/components/Header";
 import Footer from "@/components/Footer";
 import PageTransition from "@/components/PageTransition";
 import ScrollAnimation from "@/components/ScrollAnimation";
+import BackToTop from "@/components/BackToTop";
 import { Microscope, FileText, Award, Users } from "lucide-react";
 import { Link } from "react-router-dom";
 import researchLabImage from "@/assets/research-lab-hq.jpg";
@@ -137,6 +138,7 @@ const Research = () => {
         </section>
       </main>
       <Footer />
+      <BackToTop />
       </div>
     </PageTransition>
   );

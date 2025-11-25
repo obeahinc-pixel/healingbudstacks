@@ -2,6 +2,7 @@ import Header from "@/components/Header";
 import Footer from "@/components/Footer";
 import PageTransition from "@/components/PageTransition";
 import ScrollAnimation from "@/components/ScrollAnimation";
+import BackToTop from "@/components/BackToTop";
 import { Link } from "react-router-dom";
 import { ChevronDown, ChevronRight } from "lucide-react";
 import { useState } from "react";
@@ -322,6 +323,7 @@ const Anxiety = () => {
           </section>
         </main>
         <Footer />
+        <BackToTop />
       </div>
     </PageTransition>
   );
