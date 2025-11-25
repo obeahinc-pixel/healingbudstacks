@@ -4,6 +4,7 @@ import hbLogoWhite from "@/assets/hb-logo-white-new.png";
 import { useState, useEffect } from "react";
 import { cn } from "@/lib/utils";
 import EligibilityDialog from "./EligibilityDialog";
+import { motion, useScroll, useSpring } from "framer-motion";
 
 const Header = () => {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
@@ -11,6 +12,14 @@ const Header = () => {
   const [scrolled, setScrolled] = useState(false);
   const [eligibilityDialogOpen, setEligibilityDialogOpen] = useState(false);
   const location = useLocation();
+  
+  // Scroll progress tracking
+  const { scrollYProgress } = useScroll();
+  const scaleX = useSpring(scrollYProgress, {
+    stiffness: 100,
+    damping: 30,
+    restDelta: 0.001
+  });
 
   useEffect(() => {
     const handleScroll = () => {
@@ -27,6 +36,15 @@ const Header = () => {
 
   return (
     <>
+      {/* Scroll Progress Bar */}
+      <motion.div
+        className="fixed top-0 left-0 right-0 h-1 bg-gradient-to-r from-primary via-secondary to-primary origin-left z-[60]"
+        style={{ 
+          scaleX,
+          transformOrigin: "0%"
+        }}
+      />
+      
       <header 
         className={cn(
           "fixed top-2 left-2 right-2 z-50 backdrop-blur-xl rounded-xl transition-all duration-500 ease-out border",
