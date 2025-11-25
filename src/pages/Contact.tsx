@@ -2,6 +2,7 @@ import Header from "@/components/Header";
 import Footer from "@/components/Footer";
 import PageTransition from "@/components/PageTransition";
 import ScrollAnimation from "@/components/ScrollAnimation";
+import BackToTop from "@/components/BackToTop";
 import { Mail, Phone, MapPin } from "lucide-react";
 import greenhouseImage from "@/assets/greenhouse-rows.png";
 
@@ -161,6 +162,7 @@ const Contact = () => {
         </section>
       </main>
       <Footer />
+      <BackToTop />
       </div>
     </PageTransition>
   );

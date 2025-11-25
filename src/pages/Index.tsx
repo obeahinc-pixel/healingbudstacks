@@ -7,6 +7,7 @@ import International from "@/components/International";
 import News from "@/components/News";
 import Footer from "@/components/Footer";
 import PageTransition from "@/components/PageTransition";
+import BackToTop from "@/components/BackToTop";
 import { useState, useEffect } from "react";
 
 const Index = () => {
@@ -43,6 +44,7 @@ const Index = () => {
           <News />
         </main>
         <Footer />
+        <BackToTop />
       </div>
     </PageTransition>
   );

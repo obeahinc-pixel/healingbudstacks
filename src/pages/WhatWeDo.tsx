@@ -2,6 +2,7 @@ import Header from "@/components/Header";
 import Footer from "@/components/Footer";
 import PageTransition from "@/components/PageTransition";
 import ScrollAnimation from "@/components/ScrollAnimation";
+import BackToTop from "@/components/BackToTop";
 import { Leaf, Users, FlaskConical } from "lucide-react";
 import { Link } from "react-router-dom";
 import indoorCultivationImage from "@/assets/hero-greenhouse-hq.jpg";
@@ -174,8 +175,9 @@ const WhatWeDo = () => {
             </Link>
           </div>
         </section>
-      </main>
-      <Footer />
+        </main>
+        <Footer />
+        <BackToTop />
       </div>
     </PageTransition>
   );

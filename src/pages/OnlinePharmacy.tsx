@@ -2,6 +2,7 @@ import Header from "@/components/Header";
 import Footer from "@/components/Footer";
 import PageTransition from "@/components/PageTransition";
 import ScrollAnimation from "@/components/ScrollAnimation";
+import BackToTop from "@/components/BackToTop";
 import { ShoppingCart, Clock, Shield, HeartPulse, ChevronDown } from "lucide-react";
 import { useState, useRef } from "react";
 import { motion, useScroll, useTransform } from "framer-motion";
@@ -332,6 +333,7 @@ const OnlinePharmacy = () => {
           </section>
         </main>
         <Footer />
+        <BackToTop />
       </div>
     </PageTransition>
   );
