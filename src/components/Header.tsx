@@ -175,7 +175,29 @@ const Header = () => {
               Contact Us
             </Link>
 
-            {/* Desktop Action Buttons - Removed, moved to bottom */}
+            {/* Desktop Action Buttons */}
+            <div className="flex items-center gap-3 ml-4">
+              <button
+                onClick={() => setEligibilityDialogOpen(true)}
+                className={cn(
+                  "font-body font-semibold text-white px-4 py-2 rounded-full transition-all duration-300 hover:scale-105 hover:shadow-lg",
+                  scrolled ? "text-sm" : "text-sm"
+                )}
+                style={{ 
+                  background: 'linear-gradient(135deg, hsl(var(--lime-green)), hsl(var(--deep-teal)))',
+                }}
+              >
+                Check Eligibility
+              </button>
+              <button
+                className={cn(
+                  "font-body font-semibold text-foreground px-4 py-2 rounded-full transition-all duration-300 hover:scale-105 border-2 border-primary/50 bg-background/90 hover:bg-primary/10 hover:shadow-lg",
+                  scrolled ? "text-sm" : "text-sm"
+                )}
+              >
+                Patient Login
+              </button>
+            </div>
           </nav>
 
           {/* Eligibility Dialog */}
