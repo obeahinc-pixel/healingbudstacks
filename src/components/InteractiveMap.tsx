@@ -411,7 +411,7 @@ const InteractiveMap = ({ selectedCountry, onCountrySelect }: InteractiveMapProp
   return (
     <div className="relative w-full h-full">
       {/* Compliance Disclaimer Banner */}
-      <div className="absolute top-6 right-6 z-10 bg-secondary/95 backdrop-blur-sm rounded-xl shadow-lg border border-border/60 p-4 max-w-xs">
+      <div className="absolute top-6 right-6 z-10 bg-background/98 backdrop-blur-sm rounded-xl shadow-xl border-2 border-primary/30 p-4 max-w-xs">
         <div className="flex items-start gap-3">
           <div className="w-5 h-5 rounded-full bg-primary/20 flex items-center justify-center flex-shrink-0 mt-0.5">
             <svg width="12" height="12" viewBox="0 0 12 12" fill="none" className="text-primary">
@@ -419,7 +419,7 @@ const InteractiveMap = ({ selectedCountry, onCountrySelect }: InteractiveMapProp
             </svg>
           </div>
           <div>
-            <div className="text-xs font-bold text-foreground mb-1">Licensed Partner Network</div>
+            <div className="text-xs font-bold text-foreground mb-1.5">Licensed Partner Network</div>
             <p className="text-[10px] text-muted-foreground leading-relaxed">
               All facilities operate under licensed partners with full regulatory compliance. Digital Key holders earn blockchain-verified rewards without handling cannabis products.
             </p>
