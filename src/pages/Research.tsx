@@ -1,10 +1,12 @@
+import { useState } from "react";
 import Header from "@/components/Header";
 import Footer from "@/components/Footer";
 import PageTransition from "@/components/PageTransition";
 import ScrollAnimation from "@/components/ScrollAnimation";
 import BackToTop from "@/components/BackToTop";
-import { Microscope, FileText, Award, Users, ArrowRight } from "lucide-react";
+import { Microscope, FileText, Award, Users, Search } from "lucide-react";
 import { Link } from "react-router-dom";
+import { Input } from "@/components/ui/input";
 import researchLabImage from "@/assets/research-lab-hq.jpg";
 import conditionAnxiety from "@/assets/condition-anxiety.jpg";
 import conditionChronicPain from "@/assets/condition-chronic-pain.jpg";
@@ -43,6 +45,32 @@ const conditionsByCategory = {
 };
 
 const Research = () => {
+  const [searchQuery, setSearchQuery] = useState("");
+  const [selectedCategory, setSelectedCategory] = useState("All");
+
+  const categories = ["All", ...Object.keys(conditionsByCategory)];
+
+  // Flatten all conditions with their categories for filtering
+  const allConditions = Object.entries(conditionsByCategory).flatMap(([category, conditions]) =>
+    conditions.map(condition => ({ ...condition, category }))
+  );
+
+  // Filter conditions based on search and category
+  const filteredConditions = allConditions.filter((condition) => {
+    const matchesSearch = condition.name.toLowerCase().includes(searchQuery.toLowerCase());
+    const matchesCategory = selectedCategory === "All" || condition.category === selectedCategory;
+    return matchesSearch && matchesCategory;
+  });
+
+  // Group filtered conditions by category
+  const filteredByCategory = filteredConditions.reduce((acc, condition) => {
+    if (!acc[condition.category]) {
+      acc[condition.category] = [];
+    }
+    acc[condition.category].push(condition);
+    return acc;
+  }, {} as Record<string, typeof allConditions>);
+
   return (
     <PageTransition>
       <div className="min-h-screen bg-background">
@@ -133,47 +161,90 @@ const Research = () => {
               <h2 className="text-3xl md:text-4xl lg:text-5xl font-semibold text-foreground text-center mb-6 tracking-tight">
                 Eligible Conditions We Treat
               </h2>
-              <p className="text-lg text-muted-foreground/80 text-center max-w-3xl mx-auto mb-16">
+              <p className="text-lg text-muted-foreground/80 text-center max-w-3xl mx-auto mb-12">
                 Medical cannabis research across key therapeutic areas
               </p>
             </ScrollAnimation>
-            
-            <div className="space-y-16 max-w-7xl mx-auto">
-              {Object.entries(conditionsByCategory).map(([category, conditions]) => (
-                <div key={category}>
-                  <ScrollAnimation>
-                    <h3 className="text-2xl md:text-3xl font-semibold text-foreground mb-8 tracking-tight">
-                      {category}
-                    </h3>
-                  </ScrollAnimation>
-                  
-                  <div className="grid sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
-                    {conditions.map((condition) => (
-                      <ScrollAnimation key={condition.id}>
-                        <Link
-                          to={`/conditions/${condition.id}`}
-                          className="group block bg-card rounded-xl overflow-hidden shadow-md hover:shadow-xl transition-all duration-300 hover:-translate-y-2 border border-border/30"
-                        >
-                          <div className="h-48 overflow-hidden bg-gradient-to-br from-muted/30 to-muted/10">
-                            <img
-                              src={condition.image}
-                              alt={condition.name}
-                              className="w-full h-full object-contain p-6 group-hover:scale-105 transition-transform duration-500"
-                            />
-                          </div>
-                          <div className="p-5">
-                            <h3 className="text-xl font-semibold text-foreground mb-2 group-hover:text-primary transition-colors">
-                              {condition.name}
-                            </h3>
-                            <p className="text-sm text-muted-foreground">{category}</p>
-                          </div>
-                        </Link>
-                      </ScrollAnimation>
-                    ))}
-                  </div>
+
+            {/* Search and Filter */}
+            <div className="max-w-4xl mx-auto mb-12 space-y-6">
+              <ScrollAnimation>
+                <div className="relative">
+                  <Search className="absolute left-4 top-1/2 -translate-y-1/2 h-5 w-5 text-muted-foreground" />
+                  <Input
+                    type="text"
+                    placeholder="Search conditions..."
+                    value={searchQuery}
+                    onChange={(e) => setSearchQuery(e.target.value)}
+                    className="pl-12 h-12 text-base bg-card border-border/50 focus:border-primary"
+                  />
                 </div>
-              ))}
+              </ScrollAnimation>
+
+              <ScrollAnimation>
+                <div className="flex flex-wrap gap-3 justify-center">
+                  {categories.map((category) => (
+                    <button
+                      key={category}
+                      onClick={() => setSelectedCategory(category)}
+                      className={`px-5 py-2.5 rounded-lg font-medium transition-all duration-200 ${
+                        selectedCategory === category
+                          ? "bg-primary text-primary-foreground shadow-md"
+                          : "bg-card text-foreground hover:bg-muted border border-border/50"
+                      }`}
+                    >
+                      {category}
+                    </button>
+                  ))}
+                </div>
+              </ScrollAnimation>
             </div>
+            
+            {/* Conditions Grid */}
+            {filteredConditions.length === 0 ? (
+              <div className="text-center py-16">
+                <p className="text-lg text-muted-foreground">
+                  No conditions found matching your search.
+                </p>
+              </div>
+            ) : (
+              <div className="space-y-16 max-w-7xl mx-auto">
+                {Object.entries(filteredByCategory).map(([category, conditions]) => (
+                  <div key={category}>
+                    <ScrollAnimation>
+                      <h3 className="text-2xl md:text-3xl font-semibold text-foreground mb-8 tracking-tight">
+                        {category}
+                      </h3>
+                    </ScrollAnimation>
+                    
+                    <div className="grid sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
+                      {conditions.map((condition) => (
+                        <ScrollAnimation key={condition.id}>
+                          <Link
+                            to={`/conditions/${condition.id}`}
+                            className="group block bg-card rounded-xl overflow-hidden shadow-md hover:shadow-xl transition-all duration-300 hover:-translate-y-2 border border-border/30"
+                          >
+                            <div className="h-48 overflow-hidden bg-gradient-to-br from-muted/30 to-muted/10">
+                              <img
+                                src={condition.image}
+                                alt={condition.name}
+                                className="w-full h-full object-contain p-6 group-hover:scale-105 transition-transform duration-500"
+                              />
+                            </div>
+                            <div className="p-5">
+                              <h3 className="text-xl font-semibold text-foreground mb-2 group-hover:text-primary transition-colors">
+                                {condition.name}
+                              </h3>
+                              <p className="text-sm text-muted-foreground">{category}</p>
+                            </div>
+                          </Link>
+                        </ScrollAnimation>
+                      ))}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
 
             <ScrollAnimation>
               <div className="mt-20 text-center">
