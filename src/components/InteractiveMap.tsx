@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import maplibregl from 'maplibre-gl';
 import 'maplibre-gl/dist/maplibre-gl.css';
 import { Button } from './ui/button';
+import { Sparkles } from 'lucide-react';
 
 type LocationType = 'operations-sales' | 'export-only' | 'operations-only';
 
@@ -417,19 +418,25 @@ const InteractiveMap = ({ selectedCountry, onCountrySelect }: InteractiveMapProp
 
   return (
     <div className="relative w-full h-full">
-      {/* Compliance Disclaimer Banner */}
-      <div className="absolute top-6 right-6 z-20 bg-background/98 backdrop-blur-sm rounded-xl shadow-xl border-2 border-primary/30 p-4 max-w-xs hidden sm:block">
-        <div className="flex items-start gap-3">
-          <div className="w-5 h-5 rounded-full bg-primary/20 flex items-center justify-center flex-shrink-0 mt-0.5">
-            <svg width="12" height="12" viewBox="0 0 12 12" fill="none" className="text-primary">
-              <path d="M6 0L7.34709 4.14589H11.7063L8.17963 6.70823L9.52671 10.8541L6 8.29177L2.47329 10.8541L3.82037 6.70823L0.293661 4.14589H4.65291L6 0Z" fill="currentColor"/>
-            </svg>
-          </div>
-          <div>
-            <div className="text-xs font-bold text-foreground mb-1.5">Licensed Partner Network</div>
-            <p className="text-[10px] text-muted-foreground leading-relaxed">
-              All facilities operate under licensed partners with full regulatory compliance. Digital Key holders earn blockchain-verified rewards without handling cannabis products.
-            </p>
+      {/* Compliance Disclaimer Banner - Positioned Below Zoom Controls */}
+      <div className="absolute top-28 right-4 sm:right-6 z-20 max-w-xs hidden sm:block">
+        {/* Glass card with enhanced glossy effect */}
+        <div className="relative bg-gradient-to-br from-white/30 via-white/20 to-white/10 dark:from-white/20 dark:via-white/10 dark:to-white/5 backdrop-blur-2xl rounded-2xl shadow-[0_8px_32px_0_rgba(31,38,135,0.37),0_2px_8px_0_rgba(0,0,0,0.1)] border border-white/50 dark:border-white/30 p-4 overflow-hidden">
+          {/* Top glossy highlight */}
+          <div className="absolute inset-0 bg-gradient-to-b from-white/40 via-white/10 to-transparent pointer-events-none rounded-2xl" />
+          
+          {/* Shimmer effect */}
+          <div className="absolute inset-0 bg-gradient-to-br from-transparent via-white/20 to-transparent pointer-events-none rounded-2xl opacity-60" style={{ transform: 'translateX(-100%)', animation: 'shimmer 3s infinite' }} />
+          
+          {/* Content */}
+          <div className="relative z-10 flex items-start gap-3">
+            <Sparkles className="w-5 h-5 text-teal-500 dark:text-teal-400 flex-shrink-0 mt-0.5 drop-shadow-[0_0_8px_rgba(20,184,166,0.6)]" />
+            <div>
+              <div className="text-xs font-bold text-foreground mb-1.5 drop-shadow-sm">Licensed Partner Network</div>
+              <p className="text-[10px] text-muted-foreground leading-relaxed drop-shadow-sm">
+                All facilities operate under licensed partners with full regulatory compliance. Digital Key holders earn blockchain-verified rewards without handling cannabis products.
+              </p>
+            </div>
           </div>
         </div>
       </div>
