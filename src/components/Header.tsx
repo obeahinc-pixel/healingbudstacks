@@ -277,7 +277,7 @@ const Header = () => {
                     "backdrop-blur-2xl bg-gradient-to-br from-white/20 via-white/15 to-white/10",
                     "dark:from-white/15 dark:via-white/10 dark:to-white/5",
                     "border border-white/30 shadow-lg hover:border-white/50",
-                    "text-foreground hover:bg-white/25 flex items-center gap-2",
+                    "text-white hover:bg-white/25 flex items-center gap-2",
                     scrolled ? "text-sm" : "text-sm"
                   )}
                 >
@@ -292,7 +292,7 @@ const Header = () => {
                     "backdrop-blur-2xl bg-gradient-to-br from-white/20 via-white/15 to-white/10",
                     "dark:from-white/15 dark:via-white/10 dark:to-white/5",
                     "border border-white/30 shadow-lg hover:border-white/50",
-                    "text-foreground hover:bg-white/25",
+                    "text-white hover:bg-white/25",
                     scrolled ? "text-sm" : "text-sm"
                   )}
                 >
