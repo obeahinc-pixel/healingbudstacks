@@ -79,7 +79,7 @@ const CultivatingProcessing = () => {
                 <ScrollAnimation delay={0.2}>
                   <div className="space-y-6 text-muted-foreground/80">
                     <p className="text-base md:text-lg leading-relaxed">
-                      Operating from our advanced facilities across South Africa, the United Kingdom, and Thailand—with expansion underway in Portugal—we manage end-to-end cultivation, harvesting, and processing of medical-grade cannabis. Each facility spans thousands of square meters and employs cutting-edge agricultural technology to maintain pharmaceutical standards.
+                      Our South African operations include a fully functional store and dispensary, alongside partner manufacturing facilities. We also operate partner factories in Thailand. Portugal serves as our main production, processing, and shipping hub—with UK operations launching soon, followed by Portugal going fully live.
                     </p>
                     <p className="text-base md:text-lg leading-relaxed">
                       Our approach combines traditional horticultural expertise with modern precision agriculture. By maintaining rigorous quality protocols and investing in sustainable growing practices, we ensure that every batch meets international medical cannabis standards while delivering consistent therapeutic profiles.

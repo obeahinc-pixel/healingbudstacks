@@ -1,11 +1,11 @@
 {
   "hero": {
     "title": "Medical Cannabis Clinics",
-    "subtitle": "Led by doctors trained in cannabis medicine across South Africa, UK, Thailand, and Portugal"
+    "subtitle": "Led by doctors trained in cannabis medicine. Currently operational in South Africa, with UK and Portugal launching soon."
   },
   "together": {
     "title": "We bring people together",
-    "paragraph1": "Because access to quality medical cannabis care requires specialized clinical expertise, our network of clinics across South Africa, the UK, Thailand, and Portugal connect patients with experienced cannabis-trained physicians.",
+    "paragraph1": "Because access to quality medical cannabis care requires specialized clinical expertise, our clinics connect patients with experienced cannabis-trained physicians. Currently operational in South Africa, with expansion to the UK and Portugal coming soon.",
     "paragraph2": "It's not just about cannabis—it's about helping people find the life-changing relief they deserve through personalized, evidence-based care."
   },
   "services": {
@@ -27,23 +27,23 @@
   "regions": {
     "southAfrica": {
       "title": "In South Africa",
-      "paragraph1": "Our South African clinics provide access to medical cannabis treatment through a network of trained specialists. Working within local regulations, we support patients seeking alternative therapies for chronic conditions.",
+      "paragraph1": "Our South African clinics are fully operational, providing access to medical cannabis treatment through our store and dispensary alongside our network of trained specialists.",
       "paragraph2": "Comprehensive consultations and ongoing support ensure patients receive appropriate care tailored to their needs."
     },
     "uk": {
       "title": "In the United Kingdom",
-      "paragraph1": "Since 2018, medical cannabis has been available in the UK through specialist prescribers. Our UK clinics are led by GMC-registered doctors with extensive training in cannabis therapeutics.",
-      "paragraph2": "We offer consultant-led assessments and access schemes to ensure affordable treatment for eligible patients across England, Scotland, Wales, and Northern Ireland."
+      "paragraph1": "Coming Soon. Since 2018, medical cannabis has been available in the UK through specialist prescribers. Our UK clinics will be led by GMC-registered doctors with extensive training in cannabis therapeutics.",
+      "paragraph2": "We will offer consultant-led assessments and access schemes to ensure affordable treatment for eligible patients across England, Scotland, Wales, and Northern Ireland."
     },
     "thailand": {
       "title": "In Thailand",
-      "paragraph1": "Thailand's progressive cannabis regulations enable our clinics to provide medical cannabis consultations and prescriptions through licensed healthcare facilities.",
-      "paragraph2": "Our Thai medical teams combine traditional medicine knowledge with modern cannabis therapeutics to serve local and international patients."
+      "paragraph1": "We operate partner manufacturing facilities in Thailand, leveraging the country's progressive cannabis regulations and traditional cultivation expertise.",
+      "paragraph2": "Our Thai operations focus on production and processing, with clinical services planned for future expansion."
     },
     "portugal": {
       "title": "In Portugal",
-      "paragraph1": "Portugal's medical cannabis framework allows our clinics to prescribe cannabis-based medicines for qualified patients. Our Portuguese operations expand access across Southern Europe.",
-      "paragraph2": "Expert consultations in Portuguese and English ensure comprehensive care for residents and medical tourists seeking cannabis treatment."
+      "paragraph1": "Coming Soon (after UK). Portugal will serve as our main production, processing, and shipping hub for European distribution.",
+      "paragraph2": "Our Portuguese operations will expand access across Southern Europe with expert consultations in Portuguese and English."
     }
   },
   "testimonial": {
@@ -53,7 +53,7 @@
   },
   "cta": {
     "title": "Learn more about our medical cannabis clinics",
-    "description": "Explore our network of clinics across South Africa, the UK, Thailand, and Portugal. Find expert cannabis care near you.",
+    "description": "Currently operational in South Africa. UK coming soon, followed by Portugal. Find expert cannabis care.",
     "contactButton": "Contact us",
     "eligibilityButton": "Check eligibility"
   }

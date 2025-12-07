@@ -61,7 +61,7 @@ const ManufactureDistribution = () => {
                 </ScrollAnimation>
                 <ScrollAnimation delay={0.2}>
                   <p className="text-lg text-muted-foreground/80 leading-relaxed mb-4">
-                    Our state-of-the-art facilities across South Africa and Portugal span more than 18,000 square metres dedicated to pharmaceutical-grade cannabis production, supporting our annual output of 60 tonnes. With access to diverse strains and genetics from our licensed partner network, we maintain rigorous oversight from seed selection through harvesting and processing.
+                    Our operational store and dispensary in South Africa, combined with partner manufacturing facilities in South Africa and Thailand, form the foundation of our current operations. Portugal serves as our main production, processing, and shipping hub—with UK operations launching soon, followed by Portugal going fully live.
                   </p>
                   <p className="text-lg text-muted-foreground/80 leading-relaxed">
                     Each batch undergoes comprehensive testing, precise trimming, controlled drying and curing, and careful packaging to ensure consistent quality that meets stringent third-party standards.
@@ -99,7 +99,7 @@ const ManufactureDistribution = () => {
                       </div>
                       <h3 className="text-xl font-semibold text-foreground mb-3">Global Reach</h3>
                       <p className="text-muted-foreground/80 leading-relaxed">
-                        Distribution network across South Africa, UK, Thailand, and Portugal (coming soon)
+                        Currently live in South Africa and Thailand. UK coming soon, followed by Portugal.
                       </p>
                     </div>
                   </ScrollAnimation>
@@ -184,7 +184,7 @@ const ManufactureDistribution = () => {
 
                 <ScrollAnimation>
                   <p className="text-lg text-muted-foreground/80 leading-relaxed">
-                    Our extraction facilities in South Africa, the UK, Thailand, and Portugal serve local and international markets, with products distributed across Europe, Asia, Africa, and beyond. Each facility adheres to the strictest pharmaceutical manufacturing standards.
+                    Our partner factories in South Africa and Thailand serve local and international markets. Portugal will become our main processing and shipping hub for European distribution. UK operations launching soon.
                   </p>
                 </ScrollAnimation>
               </div>
@@ -200,7 +200,7 @@ const ManufactureDistribution = () => {
                     Distribution & Wholesale
                   </h2>
                   <p className="text-lg text-muted-foreground/80 leading-relaxed">
-                    We support healthcare providers, pharmacies, and clinics with reliable supply chains that help patients access medical cannabis seamlessly. Our specialized distribution partners ensure secure shipment and comprehensive digital health guidance throughout South Africa, the United Kingdom, and Thailand. Portugal distribution coming soon.
+                    We support healthcare providers, pharmacies, and clinics with reliable supply chains. Currently operational in South Africa and Thailand. UK distribution launching soon, followed by Portugal as our European hub.
                   </p>
                 </ScrollAnimation>
               </div>
