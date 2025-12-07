@@ -55,34 +55,34 @@ const MobileBottomActions = ({ menuOpen = false }: MobileBottomActionsProps) => 
             className="lg:hidden fixed bottom-0 left-0 right-0 z-50"
             style={{ paddingBottom: 'max(env(safe-area-inset-bottom, 8px), 8px)' }}
           >
-            <div className="mx-3 mb-1 rounded-2xl bg-[hsl(178,48%,21%)]/95 backdrop-blur-xl border border-white/20 shadow-2xl">
-              <div className="px-4 py-3.5">
-                <div className="flex gap-3">
+          <div className="mx-3 mb-2 rounded-2xl bg-[hsl(178,48%,21%)]/95 backdrop-blur-xl border border-white/20 shadow-2xl">
+            <div className="px-4 py-4">
+              <div className="flex gap-3">
+                <button 
+                  onClick={() => setEligibilityDialogOpen(true)}
+                  className="flex-1 font-body font-semibold px-5 py-3.5 rounded-2xl transition-all duration-300 ease-out active:scale-[0.96] shadow-lg hover:shadow-xl backdrop-blur-2xl bg-gradient-to-br from-white/30 via-white/20 to-white/10 border border-white/40 hover:border-white/60 text-white hover:from-white/40 hover:via-white/30 hover:to-white/20 text-sm cta-uniform focus-ring"
+                >
+                  {t('nav.checkEligibility')}
+                </button>
+                {user ? (
                   <button 
-                    onClick={() => setEligibilityDialogOpen(true)}
-                    className="flex-1 font-body font-semibold px-5 py-3.5 rounded-2xl transition-all duration-300 active:scale-[0.97] shadow-lg hover:shadow-xl backdrop-blur-2xl bg-gradient-to-br from-white/30 via-white/20 to-white/10 border border-white/40 hover:border-white/60 text-white hover:from-white/40 hover:via-white/30 hover:to-white/20 text-sm"
+                    onClick={handleLogout}
+                    className="flex-1 font-body font-semibold px-5 py-3.5 rounded-2xl transition-all duration-300 ease-out active:scale-[0.96] shadow-lg hover:shadow-xl backdrop-blur-2xl bg-gradient-to-br from-white/20 via-white/15 to-white/10 border border-white/30 hover:border-white/50 text-white hover:from-white/30 hover:via-white/25 hover:to-white/20 flex items-center justify-center gap-2 text-sm cta-uniform focus-ring"
                   >
-                    {t('nav.checkEligibility')}
+                    <LogOut className="w-4 h-4" />
+                    {t('nav.signOut')}
                   </button>
-                  {user ? (
-                    <button 
-                      onClick={handleLogout}
-                      className="flex-1 font-body font-semibold px-5 py-3.5 rounded-2xl transition-all duration-300 active:scale-[0.97] shadow-lg hover:shadow-xl backdrop-blur-2xl bg-gradient-to-br from-white/20 via-white/15 to-white/10 border border-white/30 hover:border-white/50 text-white hover:from-white/30 hover:via-white/25 hover:to-white/20 flex items-center justify-center gap-2 text-sm"
-                    >
-                      <LogOut className="w-4 h-4" />
-                      {t('nav.signOut')}
-                    </button>
-                  ) : (
-                    <Link 
-                      to="/auth"
-                      className="flex-1 font-body font-semibold px-5 py-3.5 rounded-2xl transition-all duration-300 active:scale-[0.97] shadow-lg hover:shadow-xl backdrop-blur-2xl bg-gradient-to-br from-white/20 via-white/15 to-white/10 border border-white/30 hover:border-white/50 text-white hover:from-white/30 hover:via-white/25 hover:to-white/20 text-center text-sm"
-                    >
-                      {t('nav.patientLogin')}
-                    </Link>
-                  )}
-                </div>
+                ) : (
+                  <Link 
+                    to="/auth"
+                    className="flex-1 font-body font-semibold px-5 py-3.5 rounded-2xl transition-all duration-300 ease-out active:scale-[0.96] shadow-lg hover:shadow-xl backdrop-blur-2xl bg-gradient-to-br from-white/20 via-white/15 to-white/10 border border-white/30 hover:border-white/50 text-white hover:from-white/30 hover:via-white/25 hover:to-white/20 text-center text-sm cta-uniform focus-ring"
+                  >
+                    {t('nav.patientLogin')}
+                  </Link>
+                )}
               </div>
             </div>
+          </div>
           </motion.div>
         )}
       </AnimatePresence>

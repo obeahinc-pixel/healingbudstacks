@@ -1,10 +1,11 @@
+import { useState, useRef } from "react";
 import Header from "@/components/Header";
 import Footer from "@/components/Footer";
 import PageTransition from "@/components/PageTransition";
 import ScrollAnimation from "@/components/ScrollAnimation";
 import BackToTop from "@/components/BackToTop";
+import MobileBottomActions from "@/components/MobileBottomActions";
 import { Plus } from "lucide-react";
-import { useState, useRef } from "react";
 import { motion, useScroll, useTransform } from "framer-motion";
 import cultivationImage from "@/assets/hero-cannabis.jpg";
 import greenhouseRows from "@/assets/greenhouse-rows.png";
@@ -16,6 +17,7 @@ import researchLab from "@/assets/research-lab-hq.jpg";
 const CultivatingProcessing = () => {
   const [activeTab, setActiveTab] = useState<"portugal" | "canada">("portugal");
   const [expandedItem, setExpandedItem] = useState<string | null>(null);
+  const [menuOpen, setMenuOpen] = useState(false);
   const heroRef = useRef<HTMLDivElement>(null);
   const { scrollYProgress } = useScroll({
     target: heroRef,
@@ -31,8 +33,8 @@ const CultivatingProcessing = () => {
 
   return (
     <PageTransition>
-      <div className="min-h-screen bg-background">
-        <Header />
+      <div className="min-h-screen bg-background pb-24 lg:pb-0">
+        <Header onMenuStateChange={setMenuOpen} />
         <main className="pt-28 md:pt-32">
           {/* Hero Section - Linear style */}
           <section className="bg-background py-16 md:py-20">
@@ -418,6 +420,7 @@ const CultivatingProcessing = () => {
         </main>
         <Footer />
         <BackToTop />
+        <MobileBottomActions menuOpen={menuOpen} />
       </div>
     </PageTransition>
   );

@@ -472,14 +472,14 @@ const Header = ({ onMenuStateChange }: HeaderProps) => {
                         setEligibilityDialogOpen(true);
                         setMobileMenuOpen(false);
                       }}
-                      className="w-full font-body font-semibold px-6 py-4 rounded-2xl transition-all duration-300 active:scale-95 shadow-lg backdrop-blur-2xl bg-gradient-to-br from-white/30 via-white/20 to-white/10 border border-white/40 text-white text-sm hover:from-white/40 hover:via-white/30 hover:to-white/20"
+                      className="w-full font-body font-semibold px-6 py-4 rounded-2xl transition-all duration-300 ease-out active:scale-[0.96] shadow-lg backdrop-blur-2xl bg-gradient-to-br from-white/30 via-white/20 to-white/10 border border-white/40 text-white text-sm hover:from-white/40 hover:via-white/30 hover:to-white/20 hover:border-white/60 hover:shadow-xl focus-ring"
                     >
                       {t('nav.checkEligibility')}
                     </button>
                     {user ? (
                       <button
                         onClick={handleLogout}
-                        className="w-full font-body font-semibold px-6 py-4 rounded-2xl transition-all duration-300 active:scale-95 shadow-lg backdrop-blur-2xl bg-gradient-to-br from-white/20 via-white/15 to-white/10 border border-white/30 text-white text-sm flex items-center justify-center gap-2 hover:from-white/30 hover:via-white/25 hover:to-white/20"
+                        className="w-full font-body font-semibold px-6 py-4 rounded-2xl transition-all duration-300 ease-out active:scale-[0.96] shadow-lg backdrop-blur-2xl bg-gradient-to-br from-white/20 via-white/15 to-white/10 border border-white/30 text-white text-sm flex items-center justify-center gap-2 hover:from-white/30 hover:via-white/25 hover:to-white/20 hover:border-white/50 hover:shadow-xl focus-ring"
                       >
                         <LogOut className="w-4 h-4" />
                         {t('nav.signOut')}
@@ -488,7 +488,7 @@ const Header = ({ onMenuStateChange }: HeaderProps) => {
                       <Link
                         to="/auth"
                         onClick={() => setMobileMenuOpen(false)}
-                        className="block w-full text-center font-body font-semibold px-6 py-4 rounded-2xl transition-all duration-300 active:scale-95 shadow-lg backdrop-blur-2xl bg-gradient-to-br from-white/20 via-white/15 to-white/10 border border-white/30 text-white text-sm hover:from-white/30 hover:via-white/25 hover:to-white/20"
+                        className="block w-full text-center font-body font-semibold px-6 py-4 rounded-2xl transition-all duration-300 ease-out active:scale-[0.96] shadow-lg backdrop-blur-2xl bg-gradient-to-br from-white/20 via-white/15 to-white/10 border border-white/30 text-white text-sm hover:from-white/30 hover:via-white/25 hover:to-white/20 hover:border-white/50 hover:shadow-xl focus-ring"
                       >
                         {t('nav.patientLogin')}
                       </Link>

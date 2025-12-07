@@ -1,20 +1,23 @@
+import { useState } from "react";
 import { useTranslation } from "react-i18next";
 import Header from "@/components/Header";
 import Footer from "@/components/Footer";
 import PageTransition from "@/components/PageTransition";
 import ScrollAnimation from "@/components/ScrollAnimation";
 import BackToTop from "@/components/BackToTop";
+import MobileBottomActions from "@/components/MobileBottomActions";
 import { Leaf, Users, FlaskConical } from "lucide-react";
 import { Link } from "react-router-dom";
 import indoorCultivationImage from "@/assets/hero-greenhouse-hq.jpg";
 
 const WhatWeDo = () => {
   const { t } = useTranslation('whatWeDo');
+  const [menuOpen, setMenuOpen] = useState(false);
 
   return (
     <PageTransition>
-      <div className="min-h-screen bg-background">
-        <Header />
+      <div className="min-h-screen bg-background pb-24 lg:pb-0">
+        <Header onMenuStateChange={setMenuOpen} />
       <main className="pt-28 md:pt-32">
         {/* Hero Section - Linear style */}
         <section className="bg-background py-16 md:py-20">
@@ -181,6 +184,7 @@ const WhatWeDo = () => {
         </main>
         <Footer />
         <BackToTop />
+        <MobileBottomActions menuOpen={menuOpen} />
       </div>
     </PageTransition>
   );

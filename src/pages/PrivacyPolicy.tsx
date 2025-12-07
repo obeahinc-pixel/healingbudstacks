@@ -1,12 +1,15 @@
+import { useState } from "react";
 import { useTranslation } from "react-i18next";
 import Header from "@/components/Header";
 import Footer from "@/components/Footer";
 import PageTransition from "@/components/PageTransition";
 import BackToTop from "@/components/BackToTop";
+import MobileBottomActions from "@/components/MobileBottomActions";
 import { Shield, Lock, Eye, FileText, Users, Globe } from "lucide-react";
 
 const PrivacyPolicy = () => {
   const { t, i18n } = useTranslation("legal");
+  const [menuOpen, setMenuOpen] = useState(false);
   
   const formatDate = () => {
     const locale = i18n.language === 'pt' ? 'pt-PT' : 'en-US';
@@ -15,8 +18,8 @@ const PrivacyPolicy = () => {
 
   return (
     <PageTransition>
-      <div className="min-h-screen bg-background">
-        <Header />
+      <div className="min-h-screen bg-background pb-24 lg:pb-0">
+        <Header onMenuStateChange={setMenuOpen} />
         <main className="pt-24 pb-16">
           <div className="container mx-auto px-4 sm:px-6 lg:px-8 max-w-4xl">
             {/* Header */}
@@ -164,6 +167,7 @@ const PrivacyPolicy = () => {
         </main>
         <Footer />
         <BackToTop />
+        <MobileBottomActions menuOpen={menuOpen} />
       </div>
     </PageTransition>
   );

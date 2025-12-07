@@ -1,10 +1,11 @@
+import { useState, useRef } from "react";
 import Header from "@/components/Header";
 import Footer from "@/components/Footer";
 import PageTransition from "@/components/PageTransition";
 import ScrollAnimation from "@/components/ScrollAnimation";
 import BackToTop from "@/components/BackToTop";
+import MobileBottomActions from "@/components/MobileBottomActions";
 import { ShoppingCart, Clock, Shield, HeartPulse, ChevronDown } from "lucide-react";
-import { useState, useRef } from "react";
 import { motion, useScroll, useTransform } from "framer-motion";
 import medicalProductsImage from "@/assets/medical-products-hq.jpg";
 import researchLabImage from "@/assets/research-lab-hq.jpg";
@@ -12,6 +13,7 @@ import productionFacility from "@/assets/production-facility-hq.jpg";
 
 const OnlinePharmacy = () => {
   const [expandedItem, setExpandedItem] = useState<string | null>(null);
+  const [menuOpen, setMenuOpen] = useState(false);
   const heroRef = useRef<HTMLDivElement>(null);
   const { scrollYProgress } = useScroll({
     target: heroRef,
@@ -27,8 +29,8 @@ const OnlinePharmacy = () => {
 
   return (
     <PageTransition>
-      <div className="min-h-screen bg-background">
-        <Header />
+      <div className="min-h-screen bg-background pb-24 lg:pb-0">
+        <Header onMenuStateChange={setMenuOpen} />
         <main className="pt-24">
           {/* Hero Section with Parallax */}
           <section ref={heroRef} className="relative h-[500px] overflow-hidden">
@@ -334,6 +336,7 @@ const OnlinePharmacy = () => {
         </main>
         <Footer />
         <BackToTop />
+        <MobileBottomActions menuOpen={menuOpen} />
       </div>
     </PageTransition>
   );

@@ -1,11 +1,12 @@
+import { useState, useRef } from "react";
 import { useTranslation } from "react-i18next";
 import Header from "@/components/Header";
 import Footer from "@/components/Footer";
 import PageTransition from "@/components/PageTransition";
 import ScrollAnimation from "@/components/ScrollAnimation";
 import BackToTop from "@/components/BackToTop";
+import MobileBottomActions from "@/components/MobileBottomActions";
 import { Users, Heart, FileText } from "lucide-react";
-import { useRef } from "react";
 import { motion, useScroll, useTransform } from "framer-motion";
 import medicalProducts from "@/assets/medical-products-hq.jpg";
 import clinicConsultation from "@/assets/clinic-consultation.jpg";
@@ -17,6 +18,7 @@ import clinicDoctorPatient from "@/assets/clinic-doctor-patient.jpg";
 
 const MedicalClinics = () => {
   const { t } = useTranslation('clinics');
+  const [menuOpen, setMenuOpen] = useState(false);
   const heroRef = useRef<HTMLDivElement>(null);
   const { scrollYProgress } = useScroll({
     target: heroRef,
@@ -28,8 +30,8 @@ const MedicalClinics = () => {
 
   return (
     <PageTransition>
-      <div className="min-h-screen bg-background">
-        <Header />
+      <div className="min-h-screen bg-background pb-24 lg:pb-0">
+        <Header onMenuStateChange={setMenuOpen} />
         <main className="pt-24">
           {/* Hero Section with Parallax */}
           <section ref={heroRef} className="relative h-[500px] overflow-hidden">
@@ -272,6 +274,7 @@ const MedicalClinics = () => {
         </main>
         <Footer />
         <BackToTop />
+        <MobileBottomActions menuOpen={menuOpen} />
       </div>
     </PageTransition>
   );
