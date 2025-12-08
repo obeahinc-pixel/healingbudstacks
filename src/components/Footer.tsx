@@ -9,13 +9,64 @@ const Footer = () => {
   
   return (
     <footer id="contact" className="text-white relative overflow-hidden" style={{ backgroundColor: 'hsl(var(--section-color))' }}>
-      {/* Botanical decoration */}
-      <div className="absolute top-0 right-0 opacity-5 pointer-events-none">
-        <svg width="400" height="400" viewBox="0 0 400 400" fill="none">
-          <path d="M200 50 Q250 100 200 150 Q150 100 200 50" stroke="currentColor" strokeWidth="1" fill="none" className="text-white"/>
-          <path d="M200 100 Q270 170 200 240 Q130 170 200 100" stroke="currentColor" strokeWidth="1" fill="none" className="text-white"/>
-          <path d="M200 150 Q290 240 200 330 Q110 240 200 150" stroke="currentColor" strokeWidth="1" fill="none" className="text-white"/>
-          <path d="M200 50 L200 350" stroke="currentColor" strokeWidth="1" className="text-white"/>
+      {/* Continuous line-art cannabis leaf decoration */}
+      <div className="absolute bottom-0 left-0 right-0 opacity-[0.04] pointer-events-none overflow-hidden">
+        <svg 
+          viewBox="0 0 800 200" 
+          fill="none" 
+          className="w-full h-auto text-white"
+          preserveAspectRatio="xMidYMax meet"
+        >
+          {/* Continuous single-line cannabis leaf with flowing line */}
+          <path 
+            d="M0 180 
+               C80 180 120 175 180 170 
+               Q200 168 220 160
+               C230 140 235 120 250 100
+               Q260 80 280 65
+               C290 55 305 50 320 55
+               Q340 62 355 80
+               C360 90 358 105 350 115
+               Q340 130 325 135
+               C310 140 290 135 280 125
+               Q270 115 275 100
+               C280 85 295 75 310 80
+               Q320 83 325 95
+               C330 75 340 55 360 45
+               Q380 35 400 40
+               C420 45 435 60 440 80
+               Q445 100 435 115
+               C425 130 405 138 385 135
+               Q365 132 355 115
+               C345 100 350 80 365 75
+               Q378 70 390 80
+               C400 50 420 30 450 28
+               Q480 26 500 40
+               C520 55 530 80 525 105
+               Q520 130 495 145
+               C470 160 440 155 420 140
+               Q400 125 405 100
+               C410 75 435 65 455 75
+               Q470 82 475 100
+               C488 70 510 45 545 40
+               Q580 35 605 55
+               C630 75 640 105 630 135
+               Q620 165 585 175
+               C550 185 515 175 495 155
+               Q475 135 485 105
+               C495 80 525 70 550 85
+               Q570 95 575 120
+               C590 100 615 85 650 90
+               Q685 95 705 120
+               C720 140 718 165 700 175
+               Q680 185 720 180
+               C760 178 800 180 800 180"
+            stroke="currentColor" 
+            strokeWidth="1.5" 
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            fill="none"
+          />
         </svg>
       </div>
       
