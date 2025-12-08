@@ -37,9 +37,9 @@ export const newsArticles: NewsArticle[] = [
     ],
   },
   {
-    id: "university-apprenticeship-programme",
+    id: "university-competition-cannabis-innovation",
     category: "Healing Buds",
-    title: "University Apprenticeship Programme: Healing Buds Invests in Tomorrow's Cannabis Industry Leaders",
+    title: "€500,000 University Competition: Healing Buds Invests in Tomorrow's Cannabis Industry Leaders",
     description: "A groundbreaking initiative offers students in Business, Computer Science, Marketing, Bio Science, Pharmaceutical Sciences, and Agricultural Technology the chance to gain hands-on experience through apprenticeships and partnership opportunities.",
     image: researchLab,
     featured: false,
