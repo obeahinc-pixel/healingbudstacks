@@ -3,44 +3,54 @@ name: Deploy HealingBuds to cPanel
 on:
   push:
     branches: [main]
-  workflow_dispatch:  # Allow manual triggers
+  workflow_dispatch: # Allow manual triggers
 
 jobs:
   deploy:
     runs-on: ubuntu-latest
-    
+
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
-      
+
+      - name: Check for merge conflicts
+        run: |
+          echo "Checking for merge conflict markers..."
+          if grep -r "<<<<<<< HEAD\|=======\|>>>>>>>" --include="*.html" --include="*.tsx" --include="*.ts" --include="*.jsx" --include="*.js" --include="*.css" .; then
+            echo "❌ ERROR: Merge conflict markers found in source files!"
+            echo "Please resolve all conflicts before deploying."
+            exit 1
+          fi
+          echo "✓ No merge conflicts detected"
+
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
           node-version: "18"
-          cache: 'npm'
-      
+          cache: "npm"
+
       - name: Install dependencies
         run: npm ci
-      
+
       - name: Build project
         run: npm run build
         env:
           NODE_ENV: production
-      
+
       - name: Setup SSH
         run: |
           mkdir -p ~/.ssh
           echo "${{ secrets.CPANEL_SSH_KEY }}" > ~/.ssh/cpanel_key
           chmod 600 ~/.ssh/cpanel_key
           ssh-keyscan -H ${{ secrets.CPANEL_HOST }} >> ~/.ssh/known_hosts
-      
+
       - name: Deploy to cPanel via rsync
         run: |
           rsync -avz --delete \
             -e "ssh -i ~/.ssh/cpanel_key -o StrictHostKeyChecking=no" \
             dist/ \
             ${{ secrets.CPANEL_USER }}@${{ secrets.CPANEL_HOST }}:public_html/
-      
+
       - name: Cleanup
         if: always()
         run: rm -f ~/.ssh/cpanel_key
