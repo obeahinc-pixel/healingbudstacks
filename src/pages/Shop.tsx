@@ -7,6 +7,7 @@ import SEOHead from '@/components/SEOHead';
 import { ProductGrid } from '@/components/shop/ProductGrid';
 import { Cart } from '@/components/shop/Cart';
 import { CartButton } from '@/components/shop/CartButton';
+import { RestrictedRegionGate } from '@/components/shop/RestrictedRegionGate';
 import { useShop } from '@/context/ShopContext';
 import { useGeoLocation } from '@/hooks/useGeoLocation';
 import { useTranslation } from 'react-i18next';
@@ -161,10 +162,12 @@ export default function Shop() {
           </div>
         </section>
 
-        {/* Products */}
+        {/* Products - gated by region restrictions */}
         <section className="py-12">
           <div className="container mx-auto px-4">
-            <ProductGrid />
+            <RestrictedRegionGate countryCode={countryCode}>
+              <ProductGrid />
+            </RestrictedRegionGate>
           </div>
         </section>
 
