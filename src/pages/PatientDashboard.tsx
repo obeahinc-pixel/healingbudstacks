@@ -15,6 +15,7 @@ import {
   Upload
 } from 'lucide-react';
 import PrescriptionManager from '@/components/dashboard/PrescriptionManager';
+import DosageTracker from '@/components/dashboard/DosageTracker';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -199,6 +200,9 @@ const PatientDashboard = () => {
 
                 {/* Prescription Manager */}
                 <PrescriptionManager />
+
+                {/* Dosage Tracker */}
+                <DosageTracker />
 
                 {/* Recent Orders */}
                 <Card className="bg-card/50 backdrop-blur-sm border-border/50">

@@ -14,6 +14,51 @@ export type Database = {
   }
   public: {
     Tables: {
+      dosage_logs: {
+        Row: {
+          consumption_method: string
+          created_at: string
+          dosage_amount: number
+          dosage_unit: string
+          effects_noted: string | null
+          id: string
+          logged_at: string
+          notes: string | null
+          side_effects: string | null
+          strain_name: string
+          symptom_relief: number | null
+          user_id: string
+        }
+        Insert: {
+          consumption_method?: string
+          created_at?: string
+          dosage_amount: number
+          dosage_unit?: string
+          effects_noted?: string | null
+          id?: string
+          logged_at?: string
+          notes?: string | null
+          side_effects?: string | null
+          strain_name: string
+          symptom_relief?: number | null
+          user_id: string
+        }
+        Update: {
+          consumption_method?: string
+          created_at?: string
+          dosage_amount?: number
+          dosage_unit?: string
+          effects_noted?: string | null
+          id?: string
+          logged_at?: string
+          notes?: string | null
+          side_effects?: string | null
+          strain_name?: string
+          symptom_relief?: number | null
+          user_id?: string
+        }
+        Relationships: []
+      }
       drgreen_cart: {
         Row: {
           created_at: string
@@ -124,12 +169,17 @@ export type Database = {
           created_at: string
           document_type: string
           expiry_date: string | null
+          expiry_notification_sent: boolean | null
+          expiry_notification_sent_at: string | null
           file_name: string
           file_path: string
           file_size: number
           file_type: string
           id: string
           notes: string | null
+          review_notes: string | null
+          reviewed_at: string | null
+          reviewed_by: string | null
           status: string
           updated_at: string
           upload_date: string
@@ -139,12 +189,17 @@ export type Database = {
           created_at?: string
           document_type?: string
           expiry_date?: string | null
+          expiry_notification_sent?: boolean | null
+          expiry_notification_sent_at?: string | null
           file_name: string
           file_path: string
           file_size: number
           file_type: string
           id?: string
           notes?: string | null
+          review_notes?: string | null
+          reviewed_at?: string | null
+          reviewed_by?: string | null
           status?: string
           updated_at?: string
           upload_date?: string
@@ -154,12 +209,17 @@ export type Database = {
           created_at?: string
           document_type?: string
           expiry_date?: string | null
+          expiry_notification_sent?: boolean | null
+          expiry_notification_sent_at?: string | null
           file_name?: string
           file_path?: string
           file_size?: number
           file_type?: string
           id?: string
           notes?: string | null
+          review_notes?: string | null
+          reviewed_at?: string | null
+          reviewed_by?: string | null
           status?: string
           updated_at?: string
           upload_date?: string
@@ -194,15 +254,42 @@ export type Database = {
         }
         Relationships: []
       }
+      user_roles: {
+        Row: {
+          created_at: string
+          id: string
+          role: Database["public"]["Enums"]["app_role"]
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          role: Database["public"]["Enums"]["app_role"]
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          role?: Database["public"]["Enums"]["app_role"]
+          user_id?: string
+        }
+        Relationships: []
+      }
     }
     Views: {
       [_ in never]: never
     }
     Functions: {
-      [_ in never]: never
+      has_role: {
+        Args: {
+          _role: Database["public"]["Enums"]["app_role"]
+          _user_id: string
+        }
+        Returns: boolean
+      }
     }
     Enums: {
-      [_ in never]: never
+      app_role: "admin" | "moderator" | "user"
     }
     CompositeTypes: {
       [_ in never]: never
@@ -329,6 +416,8 @@ export type CompositeTypes<
 
 export const Constants = {
   public: {
-    Enums: {},
+    Enums: {
+      app_role: ["admin", "moderator", "user"],
+    },
   },
 } as const
