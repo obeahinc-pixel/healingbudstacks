@@ -34,6 +34,8 @@ interface ShopContextType {
   isEligible: boolean;
   isLoading: boolean;
   refreshClient: () => Promise<void>;
+  syncVerificationFromDrGreen: () => Promise<boolean>;
+  isSyncing: boolean;
   countryCode: string;
   setCountryCode: (code: string) => void;
 }
@@ -45,6 +47,7 @@ export function ShopProvider({ children }: { children: React.ReactNode }) {
   const [isCartOpen, setIsCartOpen] = useState(false);
   const [drGreenClient, setDrGreenClient] = useState<DrGreenClient | null>(null);
   const [isLoading, setIsLoading] = useState(true);
+  const [isSyncing, setIsSyncing] = useState(false);
   const [countryCode, setCountryCode] = useState('PT');
   const { toast } = useToast();
 
@@ -100,6 +103,59 @@ export function ShopProvider({ children }: { children: React.ReactNode }) {
   const refreshClient = useCallback(async () => {
     await fetchClient();
   }, [fetchClient]);
+
+  // Sync verification status from Dr Green API
+  const syncVerificationFromDrGreen = useCallback(async (): Promise<boolean> => {
+    if (!drGreenClient?.drgreen_client_id) return false;
+    
+    setIsSyncing(true);
+    try {
+      const { data, error } = await supabase.functions.invoke('drgreen-proxy', {
+        body: {
+          action: 'get-client',
+          clientId: drGreenClient.drgreen_client_id,
+        },
+      });
+
+      if (error) {
+        console.error('Error syncing from Dr Green:', error);
+        return false;
+      }
+
+      if (data?.success && data?.data) {
+        const clientData = data.data;
+        const { data: { user } } = await supabase.auth.getUser();
+        
+        if (user) {
+          // Update local database with fresh status
+          const { error: updateError } = await supabase
+            .from('drgreen_clients')
+            .update({
+              is_kyc_verified: clientData.isKYCVerified ?? clientData.is_kyc_verified ?? false,
+              admin_approval: clientData.adminApproval ?? clientData.admin_approval ?? 'PENDING',
+              kyc_link: clientData.kycLink ?? clientData.kyc_link ?? null,
+              updated_at: new Date().toISOString(),
+            })
+            .eq('user_id', user.id);
+
+          if (updateError) {
+            console.error('Error updating client status:', updateError);
+            return false;
+          }
+
+          // Refresh local state
+          await fetchClient();
+          return true;
+        }
+      }
+      return false;
+    } catch (err) {
+      console.error('Sync verification error:', err);
+      return false;
+    } finally {
+      setIsSyncing(false);
+    }
+  }, [drGreenClient?.drgreen_client_id, fetchClient]);
 
   useEffect(() => {
     fetchCart();
@@ -227,6 +283,8 @@ export function ShopProvider({ children }: { children: React.ReactNode }) {
         isEligible,
         isLoading,
         refreshClient,
+        syncVerificationFromDrGreen,
+        isSyncing,
         countryCode,
         setCountryCode,
       }}

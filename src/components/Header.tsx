@@ -381,8 +381,8 @@ const Header = ({ onMenuStateChange }: HeaderProps) => {
                     )}
                   >
                     <LayoutDashboard className="w-3 h-3" />
-                    <span className="hidden 2xl:inline">{t('nav.dashboard')}</span>
-                    <span className="2xl:hidden">Dash</span>
+                    <span className="hidden 2xl:inline">Patient Portal</span>
+                    <span className="2xl:hidden">Portal</span>
                   </Link>
                   <button
                     onClick={handleLogout}
@@ -643,7 +643,7 @@ const Header = ({ onMenuStateChange }: HeaderProps) => {
                           className="w-full font-body font-semibold px-6 py-5 rounded-2xl transition-all duration-300 ease-out active:scale-[0.96] shadow-lg backdrop-blur-2xl bg-gradient-to-br from-primary/40 via-primary/30 to-primary/20 border border-primary/50 text-white text-base flex items-center justify-center gap-2 hover:border-primary/70 hover:shadow-xl touch-manipulation min-h-[60px]"
                         >
                           <LayoutDashboard className="w-5 h-5" />
-                          {t('nav.dashboard')}
+                          Patient Portal
                         </Link>
                         <button
                           type="button"

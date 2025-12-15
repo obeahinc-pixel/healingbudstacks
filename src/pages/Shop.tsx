@@ -51,7 +51,7 @@ const countries = [
 ];
 
 export default function Shop() {
-  const { countryCode, setCountryCode, drGreenClient, isEligible } = useShop();
+  const { countryCode, setCountryCode, drGreenClient, isEligible, syncVerificationFromDrGreen } = useShop();
   const geoLocation = useGeoLocation();
   const { t } = useTranslation('shop');
 
@@ -62,6 +62,24 @@ export default function Shop() {
       setCountryCode(geoLocation.countryCode);
     }
   }, [geoLocation.countryCode, setCountryCode, drGreenClient]);
+
+  // Background polling for verification status (every 3 minutes)
+  useEffect(() => {
+    // Only poll if user has a client record but is not yet eligible
+    if (!drGreenClient || isEligible) return;
+
+    // Initial sync
+    syncVerificationFromDrGreen();
+
+    // Set up interval for polling every 3 minutes
+    const POLL_INTERVAL = 3 * 60 * 1000; // 3 minutes
+    const intervalId = setInterval(() => {
+      console.log('Background sync: checking verification status...');
+      syncVerificationFromDrGreen();
+    }, POLL_INTERVAL);
+
+    return () => clearInterval(intervalId);
+  }, [drGreenClient, isEligible, syncVerificationFromDrGreen]);
 
   return (
     <>
