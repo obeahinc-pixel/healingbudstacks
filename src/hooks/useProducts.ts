@@ -166,20 +166,47 @@ export function useProducts(countryCode: string = 'PT') {
         setProducts(mockProducts);
       } else if (data?.success && data?.data?.strains?.length > 0) {
         // Transform API response to our Product interface
-        const transformedProducts: Product[] = data.data.strains.map((strain: any) => ({
-          id: strain.id || strain._id,
-          name: strain.name,
-          description: strain.description || '',
-          thcContent: strain.thcContent || strain.thc || 0,
-          cbdContent: strain.cbdContent || strain.cbd || 0,
-          retailPrice: strain.retailPrice || strain.price || 0,
-          availability: strain.availability ?? strain.inStock ?? true,
-          stock: strain.stock || strain.quantity || 0,
-          imageUrl: strain.imageUrl || strain.image || '/placeholder.svg',
-          effects: strain.effects || [],
-          terpenes: strain.terpenes || [],
-          category: strain.category || strain.type || 'Hybrid',
-        }));
+        const transformedProducts: Product[] = data.data.strains.map((strain: any) => {
+          // Build full image URL - API returns just filename, prepend S3 base
+          let imageUrl = '/placeholder.svg';
+          if (strain.imageUrl) {
+            imageUrl = strain.imageUrl.startsWith('http') 
+              ? strain.imageUrl 
+              : `${S3_BASE}${strain.imageUrl}`;
+          } else if (strain.image) {
+            imageUrl = strain.image.startsWith('http')
+              ? strain.image
+              : `${S3_BASE}${strain.image}`;
+          }
+
+          // Parse effects from string or array
+          let effects: string[] = [];
+          if (Array.isArray(strain.effects)) {
+            effects = strain.effects;
+          } else if (strain.feelings) {
+            effects = strain.feelings.split(',').map((s: string) => s.trim());
+          }
+
+          // Check availability from strainLocations
+          const location = strain.strainLocations?.[0];
+          const isAvailable = location?.isAvailable ?? strain.availability ?? true;
+          const stock = location?.stockQuantity ?? strain.stock ?? 0;
+
+          return {
+            id: strain.id || strain._id,
+            name: strain.name,
+            description: strain.description || '',
+            thcContent: strain.thcContent || strain.thc || 0,
+            cbdContent: strain.cbdContent || strain.cbd || 0,
+            retailPrice: strain.retailPrice || strain.price || 0,
+            availability: isAvailable,
+            stock: stock,
+            imageUrl,
+            effects,
+            terpenes: strain.flavour ? strain.flavour.split(',').map((s: string) => s.trim()) : (strain.terpenes || []),
+            category: strain.category || strain.type || 'Hybrid',
+          };
+        });
         setProducts(transformedProducts);
       } else {
         // Use fallback data if no strains returned from API
