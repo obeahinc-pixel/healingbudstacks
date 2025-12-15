@@ -498,3 +498,13 @@ All colors MUST be HSL.
 .dark #nprogress .peg {
   box-shadow: 0 0 10px hsl(155 60% 45%), 0 0 5px hsl(155 60% 45%);
 }
+
+/* Shimmer animation for loading skeletons */
+@keyframes shimmer {
+  0% {
+    transform: translateX(-100%);
+  }
+  100% {
+    transform: translateX(100%);
+  }
+}

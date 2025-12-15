@@ -192,10 +192,37 @@ export function ProductGrid() {
       {isLoading ? (
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
           {[...Array(8)].map((_, i) => (
-            <div key={i} className="space-y-3">
-              <Skeleton className="aspect-square rounded-lg" />
-              <Skeleton className="h-4 w-3/4" />
-              <Skeleton className="h-4 w-1/2" />
+            <div key={i} className="space-y-4 animate-pulse">
+              <div className="aspect-square rounded-2xl bg-gradient-to-br from-muted/80 via-muted/50 to-muted/80 relative overflow-hidden">
+                <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/10 to-transparent -translate-x-full animate-[shimmer_2s_infinite]" 
+                  style={{ animation: 'shimmer 2s infinite' }} />
+              </div>
+              <div className="space-y-3 p-1">
+                <div className="flex justify-between">
+                  <div className="h-5 bg-muted/60 rounded-lg w-2/3 relative overflow-hidden">
+                    <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/10 to-transparent animate-[shimmer_2s_infinite]" />
+                  </div>
+                  <div className="h-5 bg-primary/20 rounded-lg w-16 relative overflow-hidden">
+                    <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/10 to-transparent animate-[shimmer_2s_infinite]" />
+                  </div>
+                </div>
+                <div className="flex gap-2">
+                  <div className="h-8 bg-muted/40 rounded-lg w-20 relative overflow-hidden">
+                    <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/10 to-transparent animate-[shimmer_2s_infinite]" />
+                  </div>
+                  <div className="h-8 bg-muted/40 rounded-lg w-20 relative overflow-hidden">
+                    <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/10 to-transparent animate-[shimmer_2s_infinite]" />
+                  </div>
+                </div>
+                <div className="flex gap-1.5">
+                  <div className="h-6 bg-muted/30 rounded-full w-16" />
+                  <div className="h-6 bg-muted/30 rounded-full w-14" />
+                  <div className="h-6 bg-muted/30 rounded-full w-12" />
+                </div>
+                <div className="h-11 bg-muted/50 rounded-xl w-full relative overflow-hidden">
+                  <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/10 to-transparent animate-[shimmer_2s_infinite]" />
+                </div>
+              </div>
             </div>
           ))}
         </div>
