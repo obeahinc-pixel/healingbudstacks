@@ -142,12 +142,13 @@ export function ProductCard({ product, onViewDetails, showDataSource = false }: 
         <div className="absolute inset-0 bg-gradient-to-br from-white/5 via-transparent to-black/10 pointer-events-none" />
         
         {/* Image container - fixed aspect ratio */}
-        <div className="relative aspect-square overflow-hidden bg-gradient-to-b from-black/20 to-black/40">
+        <div className="relative aspect-square overflow-hidden bg-gradient-to-b from-black/20 to-black/40 flex items-center justify-center">
           <img
             src={product.imageUrl}
             alt={product.name}
-            className="w-full h-full object-contain p-4 transition-all duration-700 group-hover:scale-110 group-hover:rotate-2"
+            className="w-[85%] h-[85%] object-contain transition-all duration-700 group-hover:scale-110 group-hover:rotate-2 drop-shadow-[0_8px_24px_rgba(0,0,0,0.4)] filter"
             loading="lazy"
+            style={{ filter: 'drop-shadow(0 4px 12px rgba(0,0,0,0.3))' }}
           />
           
           {/* Subtle vignette */}
