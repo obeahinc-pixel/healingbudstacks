@@ -9,11 +9,22 @@ import StatisticsSection from "@/components/StatisticsSection";
 import { Target, Heart, Globe, Shield } from "lucide-react";
 import { Link } from "react-router-dom";
 import facilityImage from "@/assets/production-facility-hq.jpg";
-import { useState } from "react";
+import { useState, useRef, useEffect } from "react";
 
 const AboutUs = () => {
   const { t } = useTranslation('aboutUs');
   const [menuOpen, setMenuOpen] = useState(false);
+  const [videoLoaded, setVideoLoaded] = useState(false);
+  const videoRef = useRef<HTMLVideoElement>(null);
+
+  useEffect(() => {
+    if (videoRef.current) {
+      videoRef.current.play().catch(() => {
+        // Video autoplay failed, show fallback image
+        setVideoLoaded(false);
+      });
+    }
+  }, []);
 
   return (
     <PageTransition>
@@ -36,15 +47,40 @@ const AboutUs = () => {
           </div>
         </section>
 
-        {/* Hero Image */}
+        {/* Hero Video */}
         <section className="container mx-auto px-4 sm:px-6 lg:px-8 pb-16 md:pb-20">
-          <div className="relative h-[400px] md:h-[500px] overflow-hidden rounded-xl border border-border/30">
+          <div className="relative h-[400px] md:h-[500px] lg:h-[600px] overflow-hidden rounded-xl border border-border/30">
+            {/* Video background */}
+            <video
+              ref={videoRef}
+              autoPlay
+              muted
+              loop
+              playsInline
+              onLoadedData={() => setVideoLoaded(true)}
+              className={`absolute inset-0 w-full h-full object-cover transition-opacity duration-700 ${videoLoaded ? 'opacity-100' : 'opacity-0'}`}
+            >
+              <source src="/hero-video.mp4" type="video/mp4" />
+            </video>
+            
+            {/* Fallback image */}
             <img 
               src={facilityImage} 
               alt="Healing Buds production facility" 
-              className="absolute inset-0 w-full h-full object-cover"
+              className={`absolute inset-0 w-full h-full object-cover transition-opacity duration-700 ${videoLoaded ? 'opacity-0' : 'opacity-100'}`}
             />
-            <div className="absolute inset-0 bg-gradient-to-t from-background/10 to-transparent" />
+            
+            {/* Overlay gradient */}
+            <div className="absolute inset-0 bg-gradient-to-t from-background/40 via-transparent to-background/20" />
+            
+            {/* Ethos overlay text */}
+            <div className="absolute inset-0 flex items-end justify-start p-6 md:p-10">
+              <div className="max-w-lg">
+                <p className="text-white/90 text-sm md:text-base font-medium tracking-wide drop-shadow-lg">
+                  Excellence in cultivation • Patient-centered care • Global standards
+                </p>
+              </div>
+            </div>
           </div>
         </section>
 
