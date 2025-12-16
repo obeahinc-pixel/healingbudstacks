@@ -132,44 +132,44 @@ All colors MUST be HSL.
   }
 
   .dark {
-    /* MEDICAL DARK THEME - Calm, neutral, trustworthy */
+    /* MEDICAL DARK THEME - Clean, professional, high readability */
     /* Base: neutral charcoal, no green tint */
-    --background: 200 8% 7%;              /* Neutral near-black charcoal */
-    --foreground: 210 15% 93%;            /* Soft off-white for text */
+    --background: 210 12% 8%;             /* Neutral near-black with slight cool tone */
+    --foreground: 0 0% 96%;               /* Bright off-white for maximum readability */
 
     /* Cards: subtle lift from background */
-    --card: 200 6% 11%;                   /* Neutral dark gray */
-    --card-foreground: 210 15% 93%;
+    --card: 210 8% 12%;                   /* Neutral dark gray */
+    --card-foreground: 0 0% 95%;
 
-    --popover: 200 6% 12%;
-    --popover-foreground: 210 15% 93%;
+    --popover: 210 8% 13%;
+    --popover-foreground: 0 0% 95%;
 
-    /* Primary - sage green, matching nav tone */
-    --primary: 168 35% 38%;               /* Muted sage-teal, matching navbar */
+    /* Primary - softer sage-teal, calmer for medical */
+    --primary: 172 32% 42%;               /* Soft sage-teal, professional */
     --primary-foreground: 0 0% 100%;
 
-    /* Secondary - muted warm tone for balance */
-    --secondary: 200 6% 18%;              /* Neutral secondary surface */
-    --secondary-foreground: 210 15% 90%;
+    /* Secondary - neutral warm for balance */
+    --secondary: 210 6% 20%;              /* Neutral secondary surface */
+    --secondary-foreground: 0 0% 92%;
 
-    /* Muted surfaces */
-    --muted: 200 5% 14%;
-    --muted-foreground: 210 10% 55%;
+    /* Muted surfaces - improved contrast */
+    --muted: 210 6% 16%;
+    --muted-foreground: 210 8% 65%;       /* Higher contrast muted text */
 
     /* Accent - subtle sage for highlights only */
-    --accent: 168 20% 18%;
-    --accent-foreground: 168 30% 65%;
+    --accent: 172 18% 20%;
+    --accent-foreground: 172 25% 70%;
 
     --destructive: 0 55% 50%;
     --destructive-foreground: 0 0% 100%;
 
-    /* Borders and inputs - neutral */
-    --border: 200 6% 20%;
-    --input: 200 5% 14%;
-    --ring: 168 35% 38%;
+    /* Borders and inputs - softer */
+    --border: 210 6% 22%;
+    --input: 210 6% 16%;
+    --ring: 172 32% 42%;
     
     /* Status colors for medical UX */
-    --success: 168 35% 38%;               /* Same as primary - verified states */
+    --success: 152 45% 45%;               /* Cleaner green for verified states */
     --warning: 38 75% 55%;                /* Warm amber for attention */
     --info: 200 60% 50%;                  /* Calm blue for info */
   }

@@ -8,7 +8,7 @@ import MobileBottomActions from "@/components/MobileBottomActions";
 import StatisticsSection from "@/components/StatisticsSection";
 import { Target, Heart, Globe, Shield } from "lucide-react";
 import { Link } from "react-router-dom";
-import greenhouseImage from "@/assets/greenhouse-exterior-hq.jpg";
+import facilityImage from "@/assets/production-facility-hq.jpg";
 import { useState } from "react";
 
 const AboutUs = () => {
@@ -40,8 +40,8 @@ const AboutUs = () => {
         <section className="container mx-auto px-4 sm:px-6 lg:px-8 pb-16 md:pb-20">
           <div className="relative h-[400px] md:h-[500px] overflow-hidden rounded-xl border border-border/30">
             <img 
-              src={greenhouseImage} 
-              alt="Cannabis greenhouse facility" 
+              src={facilityImage} 
+              alt="Healing Buds production facility" 
               className="absolute inset-0 w-full h-full object-cover"
             />
             <div className="absolute inset-0 bg-gradient-to-t from-background/10 to-transparent" />
