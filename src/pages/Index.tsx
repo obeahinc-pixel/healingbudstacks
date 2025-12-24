@@ -50,12 +50,11 @@ const Index = () => {
           {/* Visual divider between sections */}
           <div className="px-2">
             <div 
-              className="relative h-8 md:h-12 overflow-hidden rounded-b-2xl sm:rounded-b-3xl"
-              style={{ backgroundColor: 'hsl(var(--section-color))' }}
+              className="relative h-8 md:h-12 overflow-hidden rounded-b-2xl sm:rounded-b-3xl bg-primary dark:bg-secondary"
             >
-              <div className="absolute inset-x-0 bottom-0 h-px bg-gradient-to-r from-transparent via-white/20 to-transparent" />
+              <div className="absolute inset-x-0 bottom-0 h-px bg-gradient-to-r from-transparent via-primary-foreground/20 to-transparent" />
               <div className="absolute left-1/2 -translate-x-1/2 bottom-3 md:bottom-4">
-                <div className="w-24 md:w-32 h-px bg-gradient-to-r from-transparent via-white/30 to-transparent" />
+                <div className="w-24 md:w-32 h-px bg-gradient-to-r from-transparent via-primary-foreground/30 to-transparent" />
               </div>
             </div>
           </div>
