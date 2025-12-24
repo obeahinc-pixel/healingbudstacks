@@ -29,7 +29,7 @@ const TheWire = () => {
       />
       <div className="min-h-screen bg-background">
         <Header onMenuStateChange={setMenuOpen} />
-        <main className="pt-24 pb-20">
+        <main className="pt-32 sm:pt-36 pb-20">
           {/* Hero Section */}
           <section className="container mx-auto px-4 sm:px-6 lg:px-8 mb-12">
             <ScrollAnimation>
