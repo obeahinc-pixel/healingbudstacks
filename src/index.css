@@ -39,15 +39,17 @@ All colors MUST be HSL.
     --muted: 171 12% 94%;
     --muted-foreground: 171 12% 46%;
 
-    --accent: 164 48% 88%;
+    /* Accent - soft sage-teal for hovers and highlights */
+    --accent: 165 35% 92%;
     --accent-foreground: 176 39% 17%;
 
-    --destructive: 0 70% 65%;
+    /* Destructive - warmer amber-coral instead of harsh red/pink */
+    --destructive: 15 65% 55%;
     --destructive-foreground: 0 0% 100%;
 
-    --border: 171 12% 88%;
-    --input: 171 12% 96%;
-    --ring: 164 48% 53%;
+    --border: 165 18% 86%;
+    --input: 165 16% 95%;
+    --ring: 172 42% 45%;
 
     --radius: 0.75rem;
 

@@ -263,7 +263,7 @@ const PageHero = ({
             </motion.div>
           )}
           
-          {/* Animated corner accent */}
+          {/* Animated corner accent - sage-teal medical palette */}
           {showCornerAccent && (
             <motion.div 
               className="absolute top-4 right-4 w-12 h-12 md:w-16 md:h-16"
@@ -271,8 +271,8 @@ const PageHero = ({
               animate={{ opacity: 1, scale: 1 }}
               transition={{ duration: 0.6, delay: 1, ease: "backOut" }}
             >
-              <div className="w-full h-full rounded-full bg-gradient-to-br from-primary/30 to-secondary/30 backdrop-blur-sm border border-white/20 flex items-center justify-center">
-                <div className="w-2 h-2 rounded-full bg-white/80 animate-pulse" />
+              <div className="w-full h-full rounded-full bg-gradient-to-br from-primary/40 to-teal-600/30 backdrop-blur-sm border border-primary/30 flex items-center justify-center">
+                <div className="w-2 h-2 rounded-full bg-primary animate-pulse" />
               </div>
             </motion.div>
           )}
