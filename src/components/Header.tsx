@@ -637,7 +637,7 @@ const Header = ({ onMenuStateChange }: HeaderProps) => {
                 }}
               >
                     {/* Navigation Links */}
-                    <div className="flex flex-col space-y-1">
+                    <div className="flex flex-col space-y-2">
                       {/* What We Do Section */}
                       <div className="space-y-1">
                         <button 
@@ -648,19 +648,25 @@ const Header = ({ onMenuStateChange }: HeaderProps) => {
                             setMobileWhatWeDoOpen(!mobileWhatWeDoOpen);
                           }}
                           className={cn(
-                            "w-full font-semibold text-base py-4 px-5 rounded-xl",
-                            "flex items-center justify-between transition-all duration-150",
+                            "w-full font-semibold text-base py-4 px-5 rounded-2xl",
+                            "flex items-center justify-between transition-all duration-200",
                             "cursor-pointer touch-manipulation min-h-[56px] active:scale-[0.98]",
-                            "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/50",
+                            "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50 focus-visible:ring-offset-2 focus-visible:ring-offset-transparent",
                             isWhatWeDoActive 
-                              ? "text-white bg-white/25 border-l-4 border-white" 
-                              : "text-white hover:bg-white/15 active:bg-white/20"
+                              ? "text-white bg-gradient-to-r from-primary/40 to-primary/20 shadow-lg shadow-primary/20" 
+                              : "text-white/90 hover:text-white hover:bg-white/10"
                           )}
                           aria-expanded={mobileWhatWeDoOpen}
                         >
-                          {t('nav.whatWeDo')}
+                          <span className="flex items-center gap-3">
+                            {isWhatWeDoActive && (
+                              <span className="w-1.5 h-1.5 rounded-full bg-primary animate-pulse" />
+                            )}
+                            {t('nav.whatWeDo')}
+                          </span>
                           <ChevronDown className={cn(
-                            "w-5 h-5 transition-transform duration-150 pointer-events-none text-white/80",
+                            "w-5 h-5 transition-transform duration-200 pointer-events-none",
+                            isWhatWeDoActive ? "text-white" : "text-white/60",
                             mobileWhatWeDoOpen && "rotate-180"
                           )} />
                         </button>
@@ -670,10 +676,10 @@ const Header = ({ onMenuStateChange }: HeaderProps) => {
                               initial={{ height: 0, opacity: 0 }}
                               animate={{ height: "auto", opacity: 1 }}
                               exit={{ height: 0, opacity: 0 }}
-                              transition={{ duration: 0.15 }}
-                              className="overflow-hidden ml-3 pl-4 border-l-2 border-white/30"
+                              transition={{ duration: 0.2, ease: [0.4, 0, 0.2, 1] }}
+                              className="overflow-hidden"
                             >
-                              <div className="space-y-1 py-2">
+                              <div className="ml-4 space-y-1 py-2 pl-4 border-l border-white/15">
                                 {[
                                   { to: '/cultivating-processing', label: 'cultivating' },
                                   { to: '/manufacture-distribution', label: 'manufacture' },
@@ -684,12 +690,12 @@ const Header = ({ onMenuStateChange }: HeaderProps) => {
                                     key={to}
                                     to={to}
                                     className={cn(
-                                      "block text-base py-3.5 px-4 rounded-lg transition-all duration-150",
-                                      "touch-manipulation min-h-[48px]",
-                                      "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/50",
+                                      "block text-base py-3 px-4 rounded-xl transition-all duration-200",
+                                      "touch-manipulation min-h-[44px]",
+                                      "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50",
                                       isActive(to)
-                                        ? "text-white font-medium bg-white/20"
-                                        : "text-white/85 hover:text-white hover:bg-white/15 active:bg-white/20"
+                                        ? "text-white font-medium bg-white/15"
+                                        : "text-white/70 hover:text-white hover:bg-white/10"
                                     )}
                                     onClick={() => setMobileMenuOpen(false)}
                                   >
@@ -705,30 +711,36 @@ const Header = ({ onMenuStateChange }: HeaderProps) => {
                       <Link 
                         to="/research" 
                         className={cn(
-                          "text-base transition-all duration-150 py-4 px-5 rounded-xl",
-                          "touch-manipulation min-h-[56px] flex items-center active:scale-[0.98]",
-                          "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/50",
+                          "text-base transition-all duration-200 py-4 px-5 rounded-2xl",
+                          "touch-manipulation min-h-[56px] flex items-center gap-3 active:scale-[0.98]",
+                          "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50",
                           isActive("/research") 
-                            ? "text-white font-semibold bg-white/25 border-l-4 border-white" 
-                            : "text-white hover:bg-white/15 active:bg-white/20"
+                            ? "text-white font-semibold bg-gradient-to-r from-primary/40 to-primary/20 shadow-lg shadow-primary/20" 
+                            : "text-white/90 hover:text-white hover:bg-white/10"
                         )}
                         onClick={() => setMobileMenuOpen(false)}
                       >
+                        {isActive("/research") && (
+                          <span className="w-1.5 h-1.5 rounded-full bg-primary animate-pulse" />
+                        )}
                         {t('nav.research')}
                       </Link>
 
                       <Link 
                         to="/the-wire" 
                         className={cn(
-                          "text-base transition-all duration-150 py-4 px-5 rounded-xl",
-                          "touch-manipulation min-h-[56px] flex items-center active:scale-[0.98]",
-                          "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/50",
+                          "text-base transition-all duration-200 py-4 px-5 rounded-2xl",
+                          "touch-manipulation min-h-[56px] flex items-center gap-3 active:scale-[0.98]",
+                          "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50",
                           isActive("/the-wire") || location.pathname.startsWith("/the-wire/") 
-                            ? "text-white font-semibold bg-white/25 border-l-4 border-white" 
-                            : "text-white hover:bg-white/15 active:bg-white/20"
+                            ? "text-white font-semibold bg-gradient-to-r from-primary/40 to-primary/20 shadow-lg shadow-primary/20" 
+                            : "text-white/90 hover:text-white hover:bg-white/10"
                         )}
                         onClick={() => setMobileMenuOpen(false)}
                       >
+                        {(isActive("/the-wire") || location.pathname.startsWith("/the-wire/")) && (
+                          <span className="w-1.5 h-1.5 rounded-full bg-primary animate-pulse" />
+                        )}
                         {t('nav.theWire')}
                       </Link>
 
@@ -742,19 +754,25 @@ const Header = ({ onMenuStateChange }: HeaderProps) => {
                             setMobileAboutUsOpen(!mobileAboutUsOpen);
                           }}
                           className={cn(
-                            "w-full font-semibold text-base py-4 px-5 rounded-xl",
-                            "flex items-center justify-between transition-all duration-150",
+                            "w-full font-semibold text-base py-4 px-5 rounded-2xl",
+                            "flex items-center justify-between transition-all duration-200",
                             "cursor-pointer touch-manipulation min-h-[56px] active:scale-[0.98]",
-                            "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/50",
+                            "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50",
                             isAboutUsActive 
-                              ? "text-white bg-white/25 border-l-4 border-white" 
-                              : "text-white hover:bg-white/15 active:bg-white/20"
+                              ? "text-white bg-gradient-to-r from-primary/40 to-primary/20 shadow-lg shadow-primary/20" 
+                              : "text-white/90 hover:text-white hover:bg-white/10"
                           )}
                           aria-expanded={mobileAboutUsOpen}
                         >
-                          {t('nav.aboutUs')}
+                          <span className="flex items-center gap-3">
+                            {isAboutUsActive && (
+                              <span className="w-1.5 h-1.5 rounded-full bg-primary animate-pulse" />
+                            )}
+                            {t('nav.aboutUs')}
+                          </span>
                           <ChevronDown className={cn(
-                            "w-5 h-5 transition-transform duration-150 pointer-events-none text-white/80",
+                            "w-5 h-5 transition-transform duration-200 pointer-events-none",
+                            isAboutUsActive ? "text-white" : "text-white/60",
                             mobileAboutUsOpen && "rotate-180"
                           )} />
                         </button>
@@ -764,10 +782,10 @@ const Header = ({ onMenuStateChange }: HeaderProps) => {
                               initial={{ height: 0, opacity: 0 }}
                               animate={{ height: "auto", opacity: 1 }}
                               exit={{ height: 0, opacity: 0 }}
-                              transition={{ duration: 0.15 }}
-                              className="overflow-hidden ml-3 pl-4 border-l-2 border-white/30"
+                              transition={{ duration: 0.2, ease: [0.4, 0, 0.2, 1] }}
+                              className="overflow-hidden"
                             >
-                              <div className="space-y-1 py-2">
+                              <div className="ml-4 space-y-1 py-2 pl-4 border-l border-white/15">
                                 {[
                                   { to: '/about-us', label: 'aboutHealing' },
                                   { to: '/blockchain-technology', label: 'blockchain' }
@@ -776,12 +794,12 @@ const Header = ({ onMenuStateChange }: HeaderProps) => {
                                     key={to}
                                     to={to}
                                     className={cn(
-                                      "block text-base py-3.5 px-4 rounded-lg transition-all duration-150",
-                                      "touch-manipulation min-h-[48px]",
-                                      "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/50",
+                                      "block text-base py-3 px-4 rounded-xl transition-all duration-200",
+                                      "touch-manipulation min-h-[44px]",
+                                      "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50",
                                       isActive(to)
-                                        ? "text-white font-medium bg-white/20"
-                                        : "text-white/85 hover:text-white hover:bg-white/15 active:bg-white/20"
+                                        ? "text-white font-medium bg-white/15"
+                                        : "text-white/70 hover:text-white hover:bg-white/10"
                                     )}
                                     onClick={() => setMobileMenuOpen(false)}
                                   >
@@ -797,39 +815,45 @@ const Header = ({ onMenuStateChange }: HeaderProps) => {
                       <Link 
                         to="/shop" 
                         className={cn(
-                          "text-base transition-all duration-150 py-4 px-5 rounded-xl",
-                          "touch-manipulation min-h-[56px] flex items-center active:scale-[0.98]",
-                          "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/50",
+                          "text-base transition-all duration-200 py-4 px-5 rounded-2xl",
+                          "touch-manipulation min-h-[56px] flex items-center gap-3 active:scale-[0.98]",
+                          "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50",
                           isActive("/shop") || location.pathname.startsWith("/shop/") 
-                            ? "text-white font-semibold bg-white/25 border-l-4 border-white" 
-                            : "text-white hover:bg-white/15 active:bg-white/20"
+                            ? "text-white font-semibold bg-gradient-to-r from-primary/40 to-primary/20 shadow-lg shadow-primary/20" 
+                            : "text-white/90 hover:text-white hover:bg-white/10"
                         )}
                         onClick={() => setMobileMenuOpen(false)}
                       >
+                        {(isActive("/shop") || location.pathname.startsWith("/shop/")) && (
+                          <span className="w-1.5 h-1.5 rounded-full bg-primary animate-pulse" />
+                        )}
                         {t('nav.shop')}
                       </Link>
 
                       <Link 
                         to="/contact" 
                         className={cn(
-                          "text-base transition-all duration-150 py-4 px-5 rounded-xl",
-                          "touch-manipulation min-h-[56px] flex items-center active:scale-[0.98]",
-                          "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/50",
+                          "text-base transition-all duration-200 py-4 px-5 rounded-2xl",
+                          "touch-manipulation min-h-[56px] flex items-center gap-3 active:scale-[0.98]",
+                          "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50",
                           isActive("/contact") 
-                            ? "text-white font-semibold bg-white/25 border-l-4 border-white" 
-                            : "text-white hover:bg-white/15 active:bg-white/20"
+                            ? "text-white font-semibold bg-gradient-to-r from-primary/40 to-primary/20 shadow-lg shadow-primary/20" 
+                            : "text-white/90 hover:text-white hover:bg-white/10"
                         )}
                         onClick={() => setMobileMenuOpen(false)}
                       >
+                        {isActive("/contact") && (
+                          <span className="w-1.5 h-1.5 rounded-full bg-primary animate-pulse" />
+                        )}
                         {t('nav.contactUs')}
                       </Link>
                     </div>
 
                     {/* Divider */}
-                    <div className="my-6 border-t border-white/20" />
+                    <div className="my-8 h-px bg-gradient-to-r from-transparent via-white/20 to-transparent" />
 
-                    {/* Mobile CTAs */}
-                    <div className="space-y-3">
+                    {/* Mobile CTAs - Modern glass morphism style */}
+                    <div className="space-y-4">
                       <button
                         type="button"
                         onClick={() => {
@@ -837,12 +861,13 @@ const Header = ({ onMenuStateChange }: HeaderProps) => {
                           setMobileMenuOpen(false);
                         }}
                         className={cn(
-                          "w-full font-body font-semibold px-6 py-4 rounded-xl",
-                          "transition-all duration-150 ease-out active:scale-[0.97]",
-                          "shadow-md bg-white text-[#1C4F4D] text-base",
-                          "hover:bg-white/95 hover:shadow-lg",
+                          "w-full font-semibold px-6 py-4 rounded-2xl",
+                          "transition-all duration-300 ease-out active:scale-[0.97]",
+                          "bg-gradient-to-r from-primary to-primary/80 text-white text-base",
+                          "shadow-lg shadow-primary/30 hover:shadow-xl hover:shadow-primary/40",
+                          "hover:from-primary/90 hover:to-primary/70",
                           "touch-manipulation min-h-[56px]",
-                          "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/50"
+                          "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50 focus-visible:ring-offset-2 focus-visible:ring-offset-transparent"
                         )}
                       >
                         {t('nav.checkEligibility')}
@@ -853,13 +878,13 @@ const Header = ({ onMenuStateChange }: HeaderProps) => {
                             to="/dashboard"
                             onClick={() => setMobileMenuOpen(false)}
                             className={cn(
-                              "w-full font-body font-semibold px-6 py-4 rounded-xl",
-                              "transition-all duration-150 ease-out active:scale-[0.97]",
-                              "shadow-md bg-white/20 border border-white/40 text-white text-base",
-                              "flex items-center justify-center gap-2",
-                              "hover:bg-white/30 hover:border-white/60",
+                              "w-full font-semibold px-6 py-4 rounded-2xl",
+                              "transition-all duration-300 ease-out active:scale-[0.97]",
+                              "bg-white/10 backdrop-blur-sm border border-white/20 text-white text-base",
+                              "flex items-center justify-center gap-3",
+                              "hover:bg-white/15 hover:border-white/30",
                               "touch-manipulation min-h-[56px]",
-                              "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/50"
+                              "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/30"
                             )}
                           >
                             <LayoutDashboard className="w-5 h-5" />
@@ -869,13 +894,13 @@ const Header = ({ onMenuStateChange }: HeaderProps) => {
                             type="button"
                             onClick={handleLogout}
                             className={cn(
-                              "w-full font-body font-semibold px-6 py-4 rounded-xl",
-                              "transition-all duration-150 ease-out active:scale-[0.97]",
-                              "shadow-md bg-white/10 border border-white/30 text-white text-base",
-                              "flex items-center justify-center gap-2",
-                              "hover:bg-white/20 hover:border-white/50",
+                              "w-full font-semibold px-6 py-4 rounded-2xl",
+                              "transition-all duration-300 ease-out active:scale-[0.97]",
+                              "bg-white/5 border border-white/10 text-white/80 text-base",
+                              "flex items-center justify-center gap-3",
+                              "hover:bg-white/10 hover:text-white hover:border-white/20",
                               "touch-manipulation min-h-[56px]",
-                              "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/50"
+                              "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/30"
                             )}
                           >
                             <LogOut className="w-5 h-5" />
@@ -887,27 +912,29 @@ const Header = ({ onMenuStateChange }: HeaderProps) => {
                           to="/auth"
                           onClick={() => setMobileMenuOpen(false)}
                           className={cn(
-                            "flex items-center justify-center w-full text-center",
-                            "font-body font-semibold px-6 py-4 rounded-xl",
-                            "transition-all duration-150 ease-out active:scale-[0.97]",
-                            "shadow-md bg-white/15 border border-white/35 text-white text-base",
-                            "hover:bg-white/25 hover:border-white/55",
+                            "flex items-center justify-center gap-3 w-full text-center",
+                            "font-semibold px-6 py-4 rounded-2xl",
+                            "transition-all duration-300 ease-out active:scale-[0.97]",
+                            "bg-white/10 backdrop-blur-sm border border-white/20 text-white text-base",
+                            "hover:bg-white/15 hover:border-white/30",
                             "touch-manipulation min-h-[56px]",
-                            "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/50"
+                            "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/30"
                           )}
                         >
+                          <LayoutDashboard className="w-5 h-5" />
                           {t('nav.patientLogin')}
                         </Link>
                       )}
                     </div>
 
                     {/* Divider */}
-                    <div className="my-6 border-t border-white/20" />
+                    <div className="my-8 h-px bg-gradient-to-r from-transparent via-white/20 to-transparent" />
 
                     {/* Bottom Section: Language & Theme */}
-                    <div className="flex items-center justify-between gap-4 px-2">
+                    <div className="flex items-center justify-center gap-6 px-2">
                       <LanguageSwitcher scrolled={scrolled} />
-                      <ThemeToggle variant="button" className="flex-1" />
+                      <div className="w-px h-6 bg-white/20" />
+                      <ThemeToggle variant="button" className="" />
                     </div>
                   </div>
                 </motion.nav>
