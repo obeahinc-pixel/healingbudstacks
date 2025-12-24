@@ -1,4 +1,4 @@
-import Header from "@/components/Header";
+import Header from "@/layout/Header";
 import Hero from "@/components/Hero";
 import AboutHero from "@/components/AboutHero";
 import ValueProps from "@/components/ValueProps";

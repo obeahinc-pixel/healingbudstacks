@@ -5,7 +5,7 @@ import { ArrowLeft, ShoppingBag, CreditCard, CheckCircle2, AlertCircle, Loader2 
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Separator } from '@/components/ui/separator';
-import Header from '@/components/Header';
+import Header from '@/layout/Header';
 import Footer from '@/components/Footer';
 import { useShop } from '@/context/ShopContext';
 import { EligibilityGate } from '@/components/shop/EligibilityGate';

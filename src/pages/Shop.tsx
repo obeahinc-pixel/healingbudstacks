@@ -1,7 +1,7 @@
 import { useEffect } from 'react';
 import { motion } from 'framer-motion';
 import { Leaf, ShieldCheck, Truck, HeartPulse } from 'lucide-react';
-import Header from '@/components/Header';
+import Header from '@/layout/Header';
 import Footer from '@/components/Footer';
 import SEOHead from '@/components/SEOHead';
 import { ProductGrid } from '@/components/shop/ProductGrid';

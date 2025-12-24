@@ -243,7 +243,7 @@ const AnimatedStatistics = ({ className = "" }: AnimatedStatisticsProps) => {
   return (
     <section 
       ref={sectionRef}
-      className={`py-20 md:py-32 relative overflow-hidden ${className}`}
+      className={`py-20 md:py-32 relative overflow-hidden my-0 ${className}`}
       style={{ backgroundColor: 'hsl(var(--section-color))' }}
     >
       {/* Animated background elements */}

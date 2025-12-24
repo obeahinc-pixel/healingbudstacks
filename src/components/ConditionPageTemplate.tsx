@@ -3,7 +3,7 @@ import { ChevronRight, ChevronDown } from "lucide-react";
 import { motion } from "framer-motion";
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
-import Header from "@/components/Header";
+import Header from "@/layout/Header";
 import Footer from "@/components/Footer";
 import BackToTop from "@/components/BackToTop";
 import ScrollAnimation from "@/components/ScrollAnimation";

@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import Header from '@/components/Header';
+import Header from '@/layout/Header';
 import Footer from '@/components/Footer';
 import SEOHead from '@/components/SEOHead';
 import { ClientOnboarding } from '@/components/shop/ClientOnboarding';

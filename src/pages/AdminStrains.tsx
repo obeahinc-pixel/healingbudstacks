@@ -58,7 +58,7 @@ import {
 } from "@/components/ui/table";
 import { useToast } from '@/hooks/use-toast';
 import { supabase } from '@/integrations/supabase/client';
-import Header from '@/components/Header';
+import Header from '@/layout/Header';
 import Footer from '@/components/Footer';
 import { useNavigate } from 'react-router-dom';
 

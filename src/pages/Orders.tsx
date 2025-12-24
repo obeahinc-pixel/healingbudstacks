@@ -4,7 +4,7 @@ import { Package, ArrowLeft, Clock, CheckCircle2, XCircle, Truck, Loader2, Refre
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
-import Header from '@/components/Header';
+import Header from '@/layout/Header';
 import Footer from '@/components/Footer';
 import { EligibilityGate } from '@/components/shop/EligibilityGate';
 import { useOrderTracking } from '@/hooks/useOrderTracking';

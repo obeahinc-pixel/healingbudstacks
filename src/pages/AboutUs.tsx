@@ -1,5 +1,5 @@
 import { useTranslation } from "react-i18next";
-import Header from "@/components/Header";
+import Header from "@/layout/Header";
 import Footer from "@/components/Footer";
 import PageTransition from "@/components/PageTransition";
 import PageHero from "@/components/PageHero";
@@ -109,7 +109,7 @@ const AboutUs = () => {
           <AnimatedStatistics />
 
           {/* Our Values with staggered cards */}
-          <section className="py-20 md:py-32 bg-muted/30 overflow-hidden">
+          <section className="py-20 md:py-32 bg-muted/30 overflow-hidden mt-0">
             <div className="container mx-auto px-4 sm:px-6 lg:px-8">
               <motion.h2 
                 className="text-3xl md:text-4xl lg:text-5xl font-semibold text-foreground text-center mb-16 md:mb-20 tracking-tight"
