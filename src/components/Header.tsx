@@ -186,11 +186,14 @@ const Header = ({ onMenuStateChange }: HeaderProps) => {
         }}
       >
         <div className="container mx-auto px-4 sm:px-6 md:px-8 lg:px-10 xl:px-12">
+          {/* 3-ZONE LAYOUT: Left (Logo) | Center (Nav) | Right (Actions) */}
           <div className={cn(
-            "flex items-center justify-between transition-all duration-500 ease-out",
+            "grid grid-cols-[auto_1fr_auto] items-center transition-all duration-500 ease-out",
             scrolled ? "h-20 md:h-[88px]" : "h-24 md:h-28"
           )}>
-            <Link to="/" className="flex items-center flex-shrink-0 group">
+            
+            {/* ZONE 1: Left - Logo (fixed width, never shrinks) */}
+            <Link to="/" className="flex items-center flex-shrink-0 group justify-self-start">
               <img 
                 src={hbLogoWhite} 
                 alt="Healing Buds Logo" 
@@ -201,11 +204,11 @@ const Header = ({ onMenuStateChange }: HeaderProps) => {
               />
             </Link>
           
-          {/* Desktop Navigation - Show on xl screens and up */}
-          <nav className={cn(
-            "hidden xl:flex items-center flex-1 justify-end transition-all duration-500 ease-out",
-            scrolled ? "gap-0.5 xl:gap-1 2xl:gap-2" : "gap-1 xl:gap-2 2xl:gap-3"
-          )}>
+            {/* ZONE 2: Center - Navigation (flexible, adapts to available space) */}
+            <nav className={cn(
+              "hidden xl:flex items-center justify-center transition-all duration-500 ease-out mx-4",
+              scrolled ? "gap-0.5 xl:gap-1 2xl:gap-2" : "gap-1 xl:gap-2 2xl:gap-3"
+            )}>
             <div 
               ref={whatWeDoRef}
               className="relative group"
@@ -220,10 +223,10 @@ const Header = ({ onMenuStateChange }: HeaderProps) => {
                     setAboutUsOpen(false);
                   }}
                   className={cn(
-                    "font-body flex items-center gap-1.5 font-semibold transition-all duration-300 ease-out relative rounded-lg hover:scale-105 whitespace-nowrap cursor-pointer select-none",
+                    "font-body flex items-center gap-1.5 font-semibold transition-all duration-300 ease-out relative rounded-lg hover:scale-105 whitespace-nowrap cursor-pointer select-none focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/50",
                     scrolled ? "text-xs 2xl:text-sm px-3 py-2" : "text-sm 2xl:text-base px-4 py-2.5",
                     isWhatWeDoActive
-                      ? "text-white bg-white/20" 
+                      ? "text-white bg-white/25 font-bold shadow-sm border-b-2 border-white" 
                       : "text-white/90 hover:text-white hover:bg-white/10"
                   )}
                 >
@@ -231,47 +234,74 @@ const Header = ({ onMenuStateChange }: HeaderProps) => {
                   <ChevronDown className={cn("w-4 h-4 transition-transform duration-150 pointer-events-none", whatWeDoOpen && "rotate-180")} />
               </button>
               
-              {/* Dropdown Menu - Linear style */}
+              {/* Dropdown Menu - High contrast, clear hierarchy */}
               <AnimatePresence>
                 {whatWeDoOpen && (
                   <motion.div 
-                    initial={{ opacity: 0, y: -10 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    exit={{ opacity: 0, y: -10 }}
-                    transition={{ duration: 0.15 }}
-                    className="absolute top-full left-0 mt-2 w-72 bg-card rounded-xl shadow-card border border-border/40 overflow-hidden z-[100]"
+                    initial={{ opacity: 0, y: -8, scale: 0.98 }}
+                    animate={{ opacity: 1, y: 0, scale: 1 }}
+                    exit={{ opacity: 0, y: -8, scale: 0.98 }}
+                    transition={{ duration: 0.15, ease: "easeOut" }}
+                    className="absolute top-full left-0 mt-3 w-80 rounded-xl overflow-hidden z-[200] shadow-2xl"
+                    style={{ 
+                      backgroundColor: 'hsl(210 12% 10%)',
+                      border: '1px solid hsl(210 8% 25%)'
+                    }}
                   >
                     <Link
                       to="/cultivating-processing"
-                      className="block px-4 py-3 text-card-foreground hover:bg-muted transition-colors border-b border-border"
+                      className={cn(
+                        "block px-5 py-4 transition-all duration-150",
+                        isActive("/cultivating-processing")
+                          ? "bg-white/15 border-l-4 border-white"
+                          : "hover:bg-white/10 border-l-4 border-transparent"
+                      )}
+                      style={{ borderBottom: '1px solid hsl(210 8% 20%)' }}
                       onClick={() => setWhatWeDoOpen(false)}
                     >
-                      <div className="font-medium">{t('dropdown.cultivating')}</div>
-                      <div className="text-sm text-muted-foreground">{t('dropdown.cultivatingDesc')}</div>
+                      <div className="font-semibold text-white">{t('dropdown.cultivating')}</div>
+                      <div className="text-sm text-white/70 mt-0.5">{t('dropdown.cultivatingDesc')}</div>
                     </Link>
                     <Link
                       to="/manufacture-distribution"
-                      className="block px-4 py-3 text-card-foreground hover:bg-muted transition-colors border-b border-border"
+                      className={cn(
+                        "block px-5 py-4 transition-all duration-150",
+                        isActive("/manufacture-distribution")
+                          ? "bg-white/15 border-l-4 border-white"
+                          : "hover:bg-white/10 border-l-4 border-transparent"
+                      )}
+                      style={{ borderBottom: '1px solid hsl(210 8% 20%)' }}
                       onClick={() => setWhatWeDoOpen(false)}
                     >
-                      <div className="font-medium">{t('dropdown.manufacture')}</div>
-                      <div className="text-sm text-muted-foreground">{t('dropdown.manufactureDesc')}</div>
+                      <div className="font-semibold text-white">{t('dropdown.manufacture')}</div>
+                      <div className="text-sm text-white/70 mt-0.5">{t('dropdown.manufactureDesc')}</div>
                     </Link>
                     <Link
                       to="/medical-clinics"
-                      className="block px-4 py-3 text-card-foreground hover:bg-muted transition-colors border-b border-border"
+                      className={cn(
+                        "block px-5 py-4 transition-all duration-150",
+                        isActive("/medical-clinics")
+                          ? "bg-white/15 border-l-4 border-white"
+                          : "hover:bg-white/10 border-l-4 border-transparent"
+                      )}
+                      style={{ borderBottom: '1px solid hsl(210 8% 20%)' }}
                       onClick={() => setWhatWeDoOpen(false)}
                     >
-                      <div className="font-medium">{t('dropdown.clinics')}</div>
-                      <div className="text-sm text-muted-foreground">{t('dropdown.clinicsDesc')}</div>
+                      <div className="font-semibold text-white">{t('dropdown.clinics')}</div>
+                      <div className="text-sm text-white/70 mt-0.5">{t('dropdown.clinicsDesc')}</div>
                     </Link>
                     <Link
                       to="/online-pharmacy"
-                      className="block px-4 py-3 text-card-foreground hover:bg-muted transition-colors"
+                      className={cn(
+                        "block px-5 py-4 transition-all duration-150",
+                        isActive("/online-pharmacy")
+                          ? "bg-white/15 border-l-4 border-white"
+                          : "hover:bg-white/10 border-l-4 border-transparent"
+                      )}
                       onClick={() => setWhatWeDoOpen(false)}
                     >
-                      <div className="font-medium">{t('dropdown.pharmacy')}</div>
-                      <div className="text-sm text-muted-foreground">{t('dropdown.pharmacyDesc')}</div>
+                      <div className="font-semibold text-white">{t('dropdown.pharmacy')}</div>
+                      <div className="text-sm text-white/70 mt-0.5">{t('dropdown.pharmacyDesc')}</div>
                     </Link>
                   </motion.div>
                 )}
@@ -280,10 +310,10 @@ const Header = ({ onMenuStateChange }: HeaderProps) => {
             <Link 
               to="/research" 
               className={cn(
-                "font-body font-semibold transition-all duration-300 ease-out rounded-lg hover:scale-105 whitespace-nowrap",
+                "font-body font-semibold transition-all duration-300 ease-out rounded-lg hover:scale-105 whitespace-nowrap focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/50",
                 scrolled ? "text-xs 2xl:text-sm px-3 py-2" : "text-sm 2xl:text-base px-4 py-2.5",
                 isActive("/research") 
-                  ? "text-white bg-white/20" 
+                  ? "text-white bg-white/25 font-bold shadow-sm border-b-2 border-white" 
                   : "text-white/90 hover:text-white hover:bg-white/10"
               )}
             >
@@ -292,10 +322,10 @@ const Header = ({ onMenuStateChange }: HeaderProps) => {
             <Link 
               to="/the-wire" 
               className={cn(
-                "font-body font-semibold transition-all duration-300 ease-out rounded-lg hover:scale-105 whitespace-nowrap",
+                "font-body font-semibold transition-all duration-300 ease-out rounded-lg hover:scale-105 whitespace-nowrap focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/50",
                 scrolled ? "text-xs 2xl:text-sm px-3 py-2" : "text-sm 2xl:text-base px-4 py-2.5",
                 isActive("/the-wire") || location.pathname.startsWith("/the-wire/")
-                  ? "text-white bg-white/20" 
+                  ? "text-white bg-white/25 font-bold shadow-sm border-b-2 border-white" 
                   : "text-white/90 hover:text-white hover:bg-white/10"
               )}
             >
@@ -315,10 +345,10 @@ const Header = ({ onMenuStateChange }: HeaderProps) => {
                   setWhatWeDoOpen(false);
                 }}
                 className={cn(
-                  "font-body flex items-center gap-1.5 font-semibold transition-all duration-300 ease-out relative rounded-lg hover:scale-105 whitespace-nowrap cursor-pointer select-none",
+                  "font-body flex items-center gap-1.5 font-semibold transition-all duration-300 ease-out relative rounded-lg hover:scale-105 whitespace-nowrap cursor-pointer select-none focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/50",
                   scrolled ? "text-xs 2xl:text-sm px-3 py-2" : "text-sm 2xl:text-base px-4 py-2.5",
                   isAboutUsActive
-                    ? "text-white bg-white/20" 
+                    ? "text-white bg-white/25 font-bold shadow-sm border-b-2 border-white" 
                     : "text-white/90 hover:text-white hover:bg-white/10"
                 )}
               >
@@ -326,31 +356,46 @@ const Header = ({ onMenuStateChange }: HeaderProps) => {
                 <ChevronDown className={cn("w-4 h-4 transition-transform duration-150 pointer-events-none", aboutUsOpen && "rotate-180")} />
               </button>
               
-              {/* Dropdown Menu */}
+              {/* Dropdown Menu - High contrast, clear hierarchy */}
               <AnimatePresence>
                 {aboutUsOpen && (
                   <motion.div 
-                    initial={{ opacity: 0, y: -10 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    exit={{ opacity: 0, y: -10 }}
-                    transition={{ duration: 0.15 }}
-                    className="absolute top-full left-0 mt-2 w-72 bg-card rounded-xl shadow-card border border-border/40 overflow-hidden z-[100]"
+                    initial={{ opacity: 0, y: -8, scale: 0.98 }}
+                    animate={{ opacity: 1, y: 0, scale: 1 }}
+                    exit={{ opacity: 0, y: -8, scale: 0.98 }}
+                    transition={{ duration: 0.15, ease: "easeOut" }}
+                    className="absolute top-full left-0 mt-3 w-80 rounded-xl overflow-hidden z-[200] shadow-2xl"
+                    style={{ 
+                      backgroundColor: 'hsl(210 12% 10%)',
+                      border: '1px solid hsl(210 8% 25%)'
+                    }}
                   >
                     <Link
                       to="/about-us"
-                      className="block px-4 py-3 text-card-foreground hover:bg-muted transition-colors border-b border-border"
+                      className={cn(
+                        "block px-5 py-4 transition-all duration-150",
+                        isActive("/about-us")
+                          ? "bg-white/15 border-l-4 border-white"
+                          : "hover:bg-white/10 border-l-4 border-transparent"
+                      )}
+                      style={{ borderBottom: '1px solid hsl(210 8% 20%)' }}
                       onClick={() => setAboutUsOpen(false)}
                     >
-                      <div className="font-medium">{t('dropdown.aboutHealing')}</div>
-                      <div className="text-sm text-muted-foreground">{t('dropdown.aboutHealingDesc')}</div>
+                      <div className="font-semibold text-white">{t('dropdown.aboutHealing')}</div>
+                      <div className="text-sm text-white/70 mt-0.5">{t('dropdown.aboutHealingDesc')}</div>
                     </Link>
                     <Link
                       to="/blockchain-technology"
-                      className="block px-4 py-3 text-card-foreground hover:bg-muted transition-colors"
+                      className={cn(
+                        "block px-5 py-4 transition-all duration-150",
+                        isActive("/blockchain-technology")
+                          ? "bg-white/15 border-l-4 border-white"
+                          : "hover:bg-white/10 border-l-4 border-transparent"
+                      )}
                       onClick={() => setAboutUsOpen(false)}
                     >
-                      <div className="font-medium">{t('dropdown.blockchain')}</div>
-                      <div className="text-sm text-muted-foreground">{t('dropdown.blockchainDesc')}</div>
+                      <div className="font-semibold text-white">{t('dropdown.blockchain')}</div>
+                      <div className="text-sm text-white/70 mt-0.5">{t('dropdown.blockchainDesc')}</div>
                     </Link>
                   </motion.div>
                 )}
@@ -359,10 +404,10 @@ const Header = ({ onMenuStateChange }: HeaderProps) => {
             <Link 
               to="/shop" 
               className={cn(
-                "font-body font-semibold transition-all duration-300 ease-out rounded-lg hover:scale-105 whitespace-nowrap",
+                "font-body font-semibold transition-all duration-300 ease-out rounded-lg hover:scale-105 whitespace-nowrap focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/50",
                 scrolled ? "text-xs 2xl:text-sm px-3 py-2" : "text-sm 2xl:text-base px-4 py-2.5",
                 isActive("/shop") || location.pathname.startsWith("/shop/")
-                  ? "text-white bg-white/20" 
+                  ? "text-white bg-white/25 font-bold shadow-sm border-b-2 border-white" 
                   : "text-white/90 hover:text-white hover:bg-white/10"
               )}
             >
@@ -371,81 +416,81 @@ const Header = ({ onMenuStateChange }: HeaderProps) => {
             <Link 
               to="/contact" 
               className={cn(
-                "font-body font-semibold transition-all duration-300 ease-out rounded-lg hover:scale-105 whitespace-nowrap",
+                "font-body font-semibold transition-all duration-300 ease-out rounded-lg hover:scale-105 whitespace-nowrap focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/50",
                 scrolled ? "text-xs 2xl:text-sm px-3 py-2" : "text-sm 2xl:text-base px-4 py-2.5",
                 isActive("/contact") 
-                  ? "text-white bg-white/20" 
+                  ? "text-white bg-white/25 font-bold shadow-sm border-b-2 border-white" 
                   : "text-white/90 hover:text-white hover:bg-white/10"
               )}
             >
               {t('nav.contactUs')}
             </Link>
 
-            {/* Language Switcher */}
-            <LanguageSwitcher scrolled={scrolled} />
+            </nav>
+            
+            {/* ZONE 3: Right - Actions (fixed width container, never overlaps nav) */}
+            <div className="hidden xl:flex items-center gap-2 2xl:gap-3 justify-self-end flex-shrink-0">
+              {/* Language Switcher */}
+              <LanguageSwitcher scrolled={scrolled} />
 
-            {/* Theme Toggle */}
-            <ThemeToggle />
+              {/* Theme Toggle */}
+              <ThemeToggle />
 
-            {/* Desktop Action Buttons */}
-            <div className="flex items-center gap-1.5 xl:gap-2 flex-shrink-0">
-              <button
-                onClick={() => setEligibilityDialogOpen(true)}
-                className={cn(
-                  "font-body font-bold px-3 xl:px-4 py-2 rounded-full transition-all duration-300 hover:scale-105 hover:shadow-xl relative z-10 whitespace-nowrap",
-                  "bg-white/95 text-[#2A3D3A] hover:bg-white",
-                  "border-2 border-white shadow-lg",
-                  "text-[11px] lg:text-xs 2xl:text-sm"
-                )}
-              >
-                <span className="hidden xl:inline">{t('nav.checkEligibility')}</span>
-                <span className="xl:hidden">Eligibility</span>
-              </button>
-              {user ? (
-                <>
-                  <Link
-                    to="/dashboard"
-                    className={cn(
-                      "font-body font-bold px-3 xl:px-4 py-2 rounded-full transition-all duration-300 hover:scale-105 hover:shadow-xl relative z-10 whitespace-nowrap",
-                      "bg-primary text-white hover:bg-primary/90",
-                      "border-2 border-primary shadow-lg flex items-center gap-1",
-                      "text-[11px] lg:text-xs 2xl:text-sm"
-                    )}
-                  >
-                    <LayoutDashboard className="w-3.5 h-3.5 xl:w-4 xl:h-4" />
-                    <span className="hidden xl:inline">Patient Portal</span>
-                    <span className="xl:hidden">Portal</span>
-                  </Link>
-                  <button
-                    onClick={handleLogout}
-                    className={cn(
-                      "font-body font-bold px-3 xl:px-4 py-2 rounded-full transition-all duration-300 hover:scale-105 hover:shadow-xl relative z-10 whitespace-nowrap",
-                      "bg-transparent text-white hover:bg-white/20",
-                      "border-2 border-white/60 shadow-lg flex items-center gap-1",
-                      "text-[11px] lg:text-xs 2xl:text-sm"
-                    )}
-                  >
-                    <LogOut className="w-3.5 h-3.5 xl:w-4 xl:h-4" />
-                    <span className="hidden xl:inline">{t('nav.signOut')}</span>
-                    <span className="xl:hidden">Out</span>
-                  </button>
-                </>
-              ) : (
-                <Link
-                  to="/auth"
+              {/* Action Buttons - explicit min-width prevents collapse */}
+              <div className="flex items-center gap-1.5 xl:gap-2 flex-shrink-0 ml-2">
+                <button
+                  onClick={() => setEligibilityDialogOpen(true)}
                   className={cn(
-                    "font-body font-bold px-3 xl:px-4 py-2 rounded-full transition-all duration-300 hover:scale-105 hover:shadow-xl relative z-10 whitespace-nowrap",
-                    "bg-transparent text-white hover:bg-white/20",
-                    "border-2 border-white/60 shadow-lg",
-                    "text-[11px] lg:text-xs 2xl:text-sm"
+                    "font-body font-bold px-4 py-2 rounded-full transition-all duration-300 hover:scale-105 hover:shadow-xl whitespace-nowrap",
+                    "bg-white text-[#2A3D3A] hover:bg-white/95",
+                    "border-2 border-white shadow-lg",
+                    "text-xs 2xl:text-sm"
                   )}
                 >
-                  <span className="hidden xl:inline">{t('nav.patientLogin')}</span>
-                  <span className="xl:hidden">Login</span>
-                </Link>
-              )}
+                  {t('nav.checkEligibility')}
+                </button>
+                {user ? (
+                  <>
+                    <Link
+                      to="/dashboard"
+                      className={cn(
+                        "font-body font-bold px-4 py-2 rounded-full transition-all duration-300 hover:scale-105 hover:shadow-xl whitespace-nowrap",
+                        "bg-primary text-white hover:bg-primary/90",
+                        "border-2 border-primary shadow-lg flex items-center gap-1.5",
+                        "text-xs 2xl:text-sm"
+                      )}
+                    >
+                      <LayoutDashboard className="w-4 h-4" />
+                      Patient Portal
+                    </Link>
+                    <button
+                      onClick={handleLogout}
+                      className={cn(
+                        "font-body font-bold px-4 py-2 rounded-full transition-all duration-300 hover:scale-105 hover:shadow-xl whitespace-nowrap",
+                        "bg-transparent text-white hover:bg-white/20",
+                        "border-2 border-white/60 shadow-lg flex items-center gap-1.5",
+                        "text-xs 2xl:text-sm"
+                      )}
+                    >
+                      <LogOut className="w-4 h-4" />
+                      {t('nav.signOut')}
+                    </button>
+                  </>
+                ) : (
+                  <Link
+                    to="/auth"
+                    className={cn(
+                      "font-body font-bold px-4 py-2 rounded-full transition-all duration-300 hover:scale-105 hover:shadow-xl whitespace-nowrap",
+                      "bg-transparent text-white hover:bg-white/20",
+                      "border-2 border-white/60 shadow-lg",
+                      "text-xs 2xl:text-sm"
+                    )}
+                  >
+                    {t('nav.patientLogin')}
+                  </Link>
+                )}
+              </div>
             </div>
-          </nav>
 
           {/* Eligibility Dialog */}
           <EligibilityDialog open={eligibilityDialogOpen} onOpenChange={setEligibilityDialogOpen} />
