@@ -117,28 +117,38 @@ const Header = ({ onMenuStateChange }: HeaderProps) => {
     }
   }, [mobileMenuOpen]);
 
-  // Lock body scroll when mobile menu is open
+  // Lock body scroll when mobile menu is open - enhanced for iOS
   useEffect(() => {
+    const scrollY = window.scrollY;
     if (mobileMenuOpen) {
       document.body.style.overflow = 'hidden';
       document.body.style.position = 'fixed';
       document.body.style.width = '100%';
-      document.body.style.top = `-${window.scrollY}px`;
+      document.body.style.height = '100%';
+      document.body.style.top = `-${scrollY}px`;
+      document.body.style.touchAction = 'none';
+      document.documentElement.style.overflow = 'hidden';
     } else {
-      const scrollY = document.body.style.top;
+      const savedScrollY = document.body.style.top;
       document.body.style.overflow = '';
       document.body.style.position = '';
       document.body.style.width = '';
+      document.body.style.height = '';
       document.body.style.top = '';
-      if (scrollY) {
-        window.scrollTo(0, parseInt(scrollY || '0') * -1);
+      document.body.style.touchAction = '';
+      document.documentElement.style.overflow = '';
+      if (savedScrollY) {
+        window.scrollTo(0, parseInt(savedScrollY || '0') * -1);
       }
     }
     return () => {
       document.body.style.overflow = '';
       document.body.style.position = '';
       document.body.style.width = '';
+      document.body.style.height = '';
       document.body.style.top = '';
+      document.body.style.touchAction = '';
+      document.documentElement.style.overflow = '';
     };
   }, [mobileMenuOpen]);
 
@@ -466,30 +476,33 @@ const Header = ({ onMenuStateChange }: HeaderProps) => {
         <AnimatePresence>
           {mobileMenuOpen && (
             <>
-              {/* Full-screen backdrop - blocks all background interaction */}
+              {/* Full-screen backdrop - completely opaque to block all content */}
               <motion.div
                 initial={{ opacity: 0 }}
                 animate={{ opacity: 1 }}
                 exit={{ opacity: 0 }}
                 transition={{ duration: 0.15 }}
-                className="xl:hidden fixed inset-0 bg-black/85 backdrop-blur-md z-[100]"
+                className="xl:hidden fixed inset-0 bg-black z-[9998]"
                 onClick={() => setMobileMenuOpen(false)}
                 aria-hidden="true"
               />
-              {/* Full-screen menu surface - owns the entire viewport */}
+              {/* Full-screen menu surface - highest z-index, owns entire viewport */}
               <motion.nav 
-                initial={{ opacity: 0, y: -20 }}
-                animate={{ opacity: 1, y: 0 }}
-                exit={{ opacity: 0, y: -20 }}
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                exit={{ opacity: 0 }}
                 transition={{ duration: 0.2, ease: "easeOut" }}
-                className="xl:hidden fixed inset-x-0 top-0 bottom-0 z-[101] flex flex-col"
+                className="xl:hidden fixed inset-0 z-[9999] flex flex-col"
                 style={{ backgroundColor: 'hsl(178 38% 20%)' }}
                 role="dialog"
                 aria-modal="true"
                 aria-label="Navigation menu"
               >
-                {/* Menu header with close button */}
-                <div className="flex items-center justify-between px-5 py-4 border-b border-white/15" style={{ backgroundColor: 'hsl(178 42% 22%)' }}>
+                {/* Menu header with close button - fixed 72px height */}
+                <div 
+                  className="flex-shrink-0 flex items-center justify-between px-5 border-b border-white/15"
+                  style={{ height: '72px', backgroundColor: 'hsl(178 42% 22%)' }}
+                >
                   <Link to="/" onClick={() => setMobileMenuOpen(false)} className="flex items-center">
                     <img 
                       src={hbLogoWhite} 
@@ -500,15 +513,18 @@ const Header = ({ onMenuStateChange }: HeaderProps) => {
                   <button
                     type="button"
                     onClick={() => setMobileMenuOpen(false)}
-                    className="p-2 rounded-lg bg-white/10 hover:bg-white/20 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/50"
+                    className="p-2.5 rounded-lg bg-white/10 hover:bg-white/20 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/50"
                     aria-label="Close menu"
                   >
                     <X className="w-6 h-6 text-white" />
                   </button>
                 </div>
                 
-                {/* Scrollable menu content */}
-                <div className="flex-1 overflow-y-auto py-6 px-5 scrollbar-thin scrollbar-track-transparent scrollbar-thumb-white/20 hover:scrollbar-thumb-white/30">
+                {/* Scrollable menu content - explicit height calc for proper scrolling */}
+                <div 
+                  className="overflow-y-auto py-6 px-5 scrollbar-thin scrollbar-track-transparent scrollbar-thumb-white/20 hover:scrollbar-thumb-white/30"
+                  style={{ height: 'calc(100dvh - 72px)', maxHeight: 'calc(100dvh - 72px)' }}
+                >
                   {/* Navigation Links */}
                   <div className="flex flex-col space-y-1">
                     {/* What We Do Section - Collapsible */}
