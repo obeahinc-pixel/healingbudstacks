@@ -166,9 +166,9 @@ const Header = ({ onMenuStateChange }: HeaderProps) => {
               />
             </Link>
           
-          {/* Desktop Navigation - Show on lg screens and up */}
+          {/* Desktop Navigation - Show on xl screens and up */}
           <nav className={cn(
-            "hidden lg:flex items-center flex-1 justify-end transition-all duration-500 ease-out",
+            "hidden xl:flex items-center flex-1 justify-end transition-all duration-500 ease-out",
             scrolled ? "gap-0.5 xl:gap-1 2xl:gap-2" : "gap-1 xl:gap-2 2xl:gap-3"
           )}>
             <div 
@@ -416,7 +416,7 @@ const Header = ({ onMenuStateChange }: HeaderProps) => {
           <EligibilityDialog open={eligibilityDialogOpen} onOpenChange={setEligibilityDialogOpen} />
 
           {/* Mobile Menu Button & Theme Toggle */}
-          <div className="lg:hidden flex items-center gap-3">
+          <div className="xl:hidden flex items-center gap-3">
             <ThemeToggle />
             <button
               type="button"
@@ -447,7 +447,7 @@ const Header = ({ onMenuStateChange }: HeaderProps) => {
                 animate={{ opacity: 1 }}
                 exit={{ opacity: 0 }}
                 transition={{ duration: 0.2 }}
-                className="lg:hidden fixed inset-0 bg-black/50 backdrop-blur-sm z-40"
+                className="xl:hidden fixed inset-0 bg-black/50 backdrop-blur-sm z-40"
                 onClick={() => setMobileMenuOpen(false)}
               />
               <motion.nav 
@@ -455,7 +455,7 @@ const Header = ({ onMenuStateChange }: HeaderProps) => {
                 animate={{ height: "auto", opacity: 1 }}
                 exit={{ height: 0, opacity: 0 }}
                 transition={{ duration: 0.3, ease: "easeInOut" }}
-                className="lg:hidden overflow-hidden border-t border-white/10"
+                className="xl:hidden overflow-hidden border-t border-white/10"
               >
                 <div className="flex flex-col py-6 px-5 max-h-[calc(100vh-140px)] overflow-y-auto">
                   {/* Navigation Links */}
