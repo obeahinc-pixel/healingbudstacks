@@ -21,6 +21,7 @@ import { useShop } from '@/context/ShopContext';
 import { useStrainMedicalInfo } from '@/hooks/useStrainMedicalInfo';
 import { useToast } from '@/hooks/use-toast';
 import { formatPrice } from '@/lib/currency';
+import { RelatedProducts } from '@/components/shop/RelatedProducts';
 
 export default function CultivarDetail() {
   const { cultivarId } = useParams<{ cultivarId: string }>();
@@ -182,7 +183,7 @@ export default function CultivarDetail() {
       
       <Header />
       
-      <main className="min-h-screen bg-background pt-20">
+      <main className="min-h-screen bg-background pt-24 lg:pt-28">
         {/* Hero Section with Image */}
         <section className={`relative overflow-hidden bg-gradient-to-b ${styles.gradient} to-background`}>
           <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_top,_var(--tw-gradient-stops))] from-white/5 via-transparent to-transparent" />
@@ -206,9 +207,12 @@ export default function CultivarDetail() {
                 transition={{ duration: 0.5 }}
                 className="relative"
               >
-                <div className={`relative aspect-square rounded-3xl bg-gradient-to-br from-slate-50 to-slate-100 dark:from-slate-900/60 dark:to-slate-900/90 border border-white/10 overflow-hidden ${styles.ring} ring-2`}>
-                  {/* Ambient glow */}
-                  <div className="absolute inset-[15%] rounded-full bg-gradient-radial from-white/10 via-white/3 to-transparent blur-3xl" />
+                <div className={`relative aspect-square rounded-3xl bg-gradient-to-br from-white via-slate-50 to-slate-100 dark:from-slate-900/60 dark:to-slate-900/90 border border-border/20 dark:border-white/10 overflow-hidden ${styles.ring} ring-2`}>
+                  {/* Light mode: clean white background for crystal clear images */}
+                  <div className="absolute inset-0 bg-gradient-to-br from-white via-slate-50/50 to-slate-100/30 dark:from-transparent dark:via-transparent dark:to-transparent" />
+                  
+                  {/* Ambient glow for dark mode only */}
+                  <div className="absolute inset-[15%] rounded-full bg-gradient-radial from-transparent dark:from-white/10 via-transparent dark:via-white/3 to-transparent blur-3xl" />
                   
                   {/* Centered image container */}
                   <div className="absolute inset-0 flex items-center justify-center p-8">
@@ -217,7 +221,7 @@ export default function CultivarDetail() {
                       alt={product.name}
                       className="w-full h-full object-contain"
                       style={{ 
-                        filter: 'drop-shadow(0 30px 60px rgba(0,0,0,0.6)) drop-shadow(0 12px 24px rgba(0,0,0,0.4))',
+                        filter: 'drop-shadow(0 20px 40px rgba(0,0,0,0.25)) drop-shadow(0 8px 16px rgba(0,0,0,0.15))',
                         maxWidth: '85%',
                         maxHeight: '85%',
                       }}
@@ -351,6 +355,13 @@ export default function CultivarDetail() {
                     {product.availability ? 'Add to Cart' : 'Out of Stock'}
                   </Button>
                 </div>
+
+                {/* Related Products Scroll Section */}
+                <RelatedProducts 
+                  products={products}
+                  currentProductId={product.id}
+                  countryCode={countryCode}
+                />
               </motion.div>
             </div>
           </div>
@@ -359,7 +370,7 @@ export default function CultivarDetail() {
         {/* Detailed Information Tabs */}
         <section className="container mx-auto px-4 py-12 lg:py-20">
           <Tabs defaultValue="medical" className="w-full">
-            <TabsList className="w-full max-w-3xl mx-auto mb-8 bg-white/5 border border-white/10 p-1 rounded-xl h-auto flex-wrap">
+            <TabsList className="w-full max-w-3xl mx-auto mb-8 bg-muted/50 dark:bg-white/5 border border-border/50 dark:border-white/10 p-1 rounded-xl h-auto flex-wrap">
               <TabsTrigger value="medical" className="flex-1 py-3 rounded-lg data-[state=active]:bg-primary data-[state=active]:text-primary-foreground">
                 <Stethoscope className="h-4 w-4 mr-2" />
                 Medical Info

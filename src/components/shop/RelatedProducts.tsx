@@ -1,0 +1,144 @@
+import { useRef } from 'react';
+import { motion } from 'framer-motion';
+import { ChevronLeft, ChevronRight, Leaf } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
+import { Button } from '@/components/ui/button';
+import { Badge } from '@/components/ui/badge';
+import { Product } from '@/hooks/useProducts';
+import { formatPrice } from '@/lib/currency';
+
+interface RelatedProductsProps {
+  products: Product[];
+  currentProductId: string;
+  countryCode: string;
+}
+
+export function RelatedProducts({ products, currentProductId, countryCode }: RelatedProductsProps) {
+  const navigate = useNavigate();
+  const scrollContainerRef = useRef<HTMLDivElement>(null);
+
+  // Filter out current product and get available products
+  const relatedProducts = products.filter(p => p.id !== currentProductId);
+
+  if (relatedProducts.length === 0) return null;
+
+  const scroll = (direction: 'left' | 'right') => {
+    if (scrollContainerRef.current) {
+      const scrollAmount = 320;
+      scrollContainerRef.current.scrollBy({
+        left: direction === 'left' ? -scrollAmount : scrollAmount,
+        behavior: 'smooth',
+      });
+    }
+  };
+
+  const getCategoryColor = (category: string) => {
+    switch (category?.toLowerCase()) {
+      case 'sativa':
+        return 'bg-amber-500/20 text-amber-600 dark:text-amber-400 border-amber-400/30';
+      case 'indica':
+        return 'bg-violet-500/20 text-violet-600 dark:text-violet-400 border-violet-400/30';
+      case 'hybrid':
+        return 'bg-emerald-500/20 text-emerald-600 dark:text-emerald-400 border-emerald-400/30';
+      case 'cbd':
+        return 'bg-cyan-500/20 text-cyan-600 dark:text-cyan-400 border-cyan-400/30';
+      default:
+        return 'bg-muted text-muted-foreground';
+    }
+  };
+
+  return (
+    <div className="mt-8">
+      {/* Section Header */}
+      <div className="flex items-center justify-between mb-4">
+        <div className="flex items-center gap-2">
+          <Leaf className="h-5 w-5 text-primary" />
+          <h3 className="text-lg font-semibold text-foreground">More Cultivars</h3>
+        </div>
+        
+        <div className="flex items-center gap-2">
+          <Button
+            variant="outline"
+            size="icon"
+            className="h-8 w-8 rounded-full border-border/50 hover:bg-accent"
+            onClick={() => scroll('left')}
+          >
+            <ChevronLeft className="h-4 w-4" />
+          </Button>
+          <Button
+            variant="outline"
+            size="icon"
+            className="h-8 w-8 rounded-full border-border/50 hover:bg-accent"
+            onClick={() => scroll('right')}
+          >
+            <ChevronRight className="h-4 w-4" />
+          </Button>
+        </div>
+      </div>
+
+      {/* Scrolling Container */}
+      <div
+        ref={scrollContainerRef}
+        className="flex gap-4 overflow-x-auto scrollbar-hide pb-2 -mx-2 px-2 snap-x snap-mandatory"
+        style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}
+      >
+        {relatedProducts.map((product, index) => (
+          <motion.div
+            key={product.id}
+            initial={{ opacity: 0, x: 20 }}
+            animate={{ opacity: 1, x: 0 }}
+            transition={{ delay: index * 0.05, duration: 0.3 }}
+            className="flex-shrink-0 w-[140px] snap-start"
+          >
+            <button
+              onClick={() => navigate(`/shop/cultivar/${product.id}`)}
+              className="w-full group text-left focus:outline-none focus-visible:ring-2 focus-visible:ring-primary rounded-xl"
+            >
+              {/* Image Container */}
+              <div className="relative aspect-square rounded-xl bg-gradient-to-br from-slate-50 to-slate-100 dark:from-slate-800/60 dark:to-slate-900/80 border border-border/30 overflow-hidden mb-2 group-hover:border-primary/40 transition-all duration-300">
+                {/* Light mode: crisp white background with subtle enhancement */}
+                <div className="absolute inset-0 bg-gradient-to-br from-white via-slate-50/80 to-slate-100/60 dark:from-transparent dark:via-transparent dark:to-transparent" />
+                
+                <div className="absolute inset-0 flex items-center justify-center p-3">
+                  <img
+                    src={product.imageUrl}
+                    alt={product.name}
+                    className="w-full h-full object-contain transition-transform duration-300 group-hover:scale-110"
+                    style={{
+                      filter: 'drop-shadow(0 4px 8px rgba(0,0,0,0.15))',
+                      maxWidth: '85%',
+                      maxHeight: '85%',
+                    }}
+                    loading="lazy"
+                  />
+                </div>
+
+                {/* Category badge */}
+                <Badge
+                  className={`absolute top-2 left-2 px-2 py-0.5 text-[10px] font-semibold uppercase ${getCategoryColor(product.category)}`}
+                >
+                  {product.category}
+                </Badge>
+
+                {/* Out of stock overlay */}
+                {!product.availability && (
+                  <div className="absolute bottom-0 left-0 right-0 bg-sky-600/90 py-1 text-center">
+                    <span className="text-[10px] font-semibold text-white uppercase">Out of Stock</span>
+                  </div>
+                )}
+              </div>
+
+              {/* Product Info */}
+              <h4 className="text-sm font-medium text-foreground truncate group-hover:text-primary transition-colors">
+                {product.name}
+              </h4>
+              <p className="text-sm font-semibold text-primary">
+                {formatPrice(product.retailPrice, countryCode)}
+              </p>
+            </button>
+          </motion.div>
+        ))}
+      </div>
+    </div>
+  );
+}
