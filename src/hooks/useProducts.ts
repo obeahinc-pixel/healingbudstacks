@@ -56,7 +56,7 @@ export function useProducts(countryCode: string = 'PT') {
     const alpha3Code = countryCodeMap[countryCode] || 'PRT';
     
     try {
-      // Fetch strains exclusively from Dr Green API
+      // First try to fetch from Dr Green API
       console.log(`Fetching strains from Dr Green API for country: ${alpha3Code}`);
       
       const { data, error: fnError } = await supabase.functions.invoke('drgreen-proxy', {
@@ -74,7 +74,7 @@ export function useProducts(countryCode: string = 'PT') {
         
         // Transform API response to our Product interface
         const transformedProducts: Product[] = data.data.strains.map((strain: any) => {
-          // Build full image URL - API returns just filename, prepend S3 base
+          // Build full image URL
           let imageUrl = '/placeholder.svg';
           if (strain.imageUrl) {
             imageUrl = strain.imageUrl.startsWith('http') 
@@ -86,7 +86,6 @@ export function useProducts(countryCode: string = 'PT') {
               : `${S3_BASE}${strain.image}`;
           }
 
-          // Parse effects from string or array
           let effects: string[] = [];
           if (Array.isArray(strain.effects)) {
             effects = strain.effects;
@@ -96,7 +95,6 @@ export function useProducts(countryCode: string = 'PT') {
             effects = strain.feelings.split(',').map((s: string) => s.trim());
           }
 
-          // Parse terpenes/flavors
           let terpenes: string[] = [];
           if (Array.isArray(strain.flavour)) {
             terpenes = strain.flavour;
@@ -108,12 +106,10 @@ export function useProducts(countryCode: string = 'PT') {
             terpenes = strain.flavors;
           }
 
-          // Check availability from strainLocations
           const location = strain.strainLocations?.[0];
           const isAvailable = location?.isAvailable ?? strain.availability ?? strain.isAvailable ?? true;
           const stock = location?.stockQuantity ?? strain.stock ?? strain.stockQuantity ?? 100;
 
-          // Get price - try multiple possible fields
           const retailPrice = 
             parseFloat(strain.retailPrice) || 
             parseFloat(strain.pricePerGram) || 
@@ -121,7 +117,6 @@ export function useProducts(countryCode: string = 'PT') {
             parseFloat(location?.retailPrice) ||
             0;
 
-          // Get THC/CBD - try multiple field names
           const thcContent = 
             parseFloat(strain.thc) || 
             parseFloat(strain.thcContent) || 
@@ -156,21 +151,65 @@ export function useProducts(countryCode: string = 'PT') {
         return;
       }
       
-      // Log API error if any
+      // Log API error/warning
       if (fnError) {
-        console.warn('Dr Green API error:', fnError);
-        setError('Unable to fetch products from the API');
+        console.warn('Dr Green API error, falling back to local DB:', fnError);
       } else if (!data?.success) {
-        console.warn('Dr Green API returned unsuccessful response:', data);
-        setError('API returned an unsuccessful response');
+        console.warn('Dr Green API returned unsuccessful, falling back to local DB:', data);
       } else {
-        console.warn('Dr Green API returned no strains for this country');
-        setError(null); // No error, just no products
+        console.warn('Dr Green API returned no strains, falling back to local DB');
       }
 
-      // No fallback - set empty products
-      setProducts([]);
-      setDataSource('none');
+      // Fallback: Fetch from local strains table
+      console.log('Fetching strains from local database...');
+      const { data: localStrains, error: dbError } = await supabase
+        .from('strains')
+        .select('*')
+        .eq('is_archived', false)
+        .order('name', { ascending: true })
+        .limit(100);
+
+      if (dbError) {
+        console.error('Local DB error:', dbError);
+        throw new Error('Failed to fetch products');
+      }
+
+      if (localStrains && localStrains.length > 0) {
+        console.log(`Loaded ${localStrains.length} strains from local database`);
+        
+        const transformedProducts: Product[] = localStrains.map((strain) => {
+          let imageUrl = '/placeholder.svg';
+          if (strain.image_url) {
+            imageUrl = strain.image_url.startsWith('http')
+              ? strain.image_url
+              : `${S3_BASE}${strain.image_url}`;
+          }
+
+          return {
+            id: strain.id,
+            name: strain.name,
+            description: strain.description || '',
+            thcContent: strain.thc_content || 0,
+            cbdContent: strain.cbd_content || 0,
+            retailPrice: strain.retail_price || 0,
+            availability: strain.availability ?? true,
+            stock: strain.stock || 0,
+            imageUrl,
+            effects: strain.feelings || [],
+            terpenes: strain.flavors || [],
+            category: strain.type || 'Hybrid',
+            dataSource: 'api' as DataSource, // Mark as API since it came from synced data
+          };
+        });
+
+        setProducts(transformedProducts);
+        setDataSource('api');
+        setError(null);
+      } else {
+        setProducts([]);
+        setDataSource('none');
+        setError('No products available');
+      }
       
     } catch (err) {
       console.error('Error fetching products:', err);
