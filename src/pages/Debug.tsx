@@ -5,9 +5,9 @@ import SEOHead from '@/components/SEOHead';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { AlertTriangle, CheckCircle2, XCircle, RefreshCw, Shield, FileText, Building2 } from 'lucide-react';
+import { AlertTriangle, CheckCircle2, XCircle, RefreshCw, Shield, FileText, Building2, Wifi } from 'lucide-react';
 import { buildLegacyClientPayload } from '@/lib/drgreenApi';
-
+import { supabase } from '@/integrations/supabase/client';
 interface TestResult {
   name: string;
   description: string;
@@ -60,6 +60,11 @@ export default function Debug() {
     {
       name: 'Business Logic Toggle',
       description: 'Verify clientBusiness is conditionally added/removed based on isBusiness flag',
+      status: 'pending',
+    },
+    {
+      name: 'API Health Check',
+      description: 'Ping drgreen-proxy edge function to verify backend connection',
       status: 'pending',
     },
   ]);
@@ -273,6 +278,64 @@ export default function Debug() {
       });
     }
     
+    // ===========================================
+    // TEST 4: API Health Check
+    // ===========================================
+    updateTest(3, { status: 'running' });
+    
+    try {
+      const startTime = Date.now();
+      
+      // Call the drgreen-health edge function (if it exists) or test drgreen-proxy with a simple action
+      const { data, error } = await supabase.functions.invoke('drgreen-health', {
+        body: { action: 'ping' },
+      });
+      
+      const responseTime = Date.now() - startTime;
+      
+      if (error) {
+        // If drgreen-health doesn't exist, try drgreen-proxy with a harmless action
+        const { data: proxyData, error: proxyError } = await supabase.functions.invoke('drgreen-proxy', {
+          body: { action: 'health-check' },
+        });
+        
+        const proxyResponseTime = Date.now() - startTime;
+        
+        if (proxyError) {
+          anyFailed = true;
+          updateTest(3, {
+            status: 'fail',
+            details: `Edge function unreachable: ${proxyError.message}`,
+            expected: 'Response from drgreen-proxy',
+            actual: `Error: ${proxyError.message}`,
+          });
+        } else {
+          // Proxy responded (even with an error response, it means the function is working)
+          updateTest(3, {
+            status: 'pass',
+            details: `Edge function responded in ${proxyResponseTime}ms`,
+            expected: 'drgreen-proxy reachable',
+            actual: `Response received in ${proxyResponseTime}ms`,
+          });
+        }
+      } else {
+        updateTest(3, {
+          status: 'pass',
+          details: `Health check passed in ${responseTime}ms`,
+          expected: 'drgreen-health reachable',
+          actual: `Response received in ${responseTime}ms${data ? `: ${JSON.stringify(data).slice(0, 100)}` : ''}`,
+        });
+      }
+    } catch (error) {
+      anyFailed = true;
+      updateTest(3, {
+        status: 'fail',
+        details: `Network error: ${error instanceof Error ? error.message : 'Unknown error'}`,
+        expected: 'Edge function reachable',
+        actual: 'Connection failed',
+      });
+    }
+    
     setHasFailures(anyFailed);
     setIsRunning(false);
   }, []);
@@ -303,6 +366,8 @@ export default function Debug() {
         return <FileText className="h-5 w-5" />;
       case 2:
         return <Building2 className="h-5 w-5" />;
+      case 3:
+        return <Wifi className="h-5 w-5" />;
       default:
         return null;
     }
@@ -462,6 +527,7 @@ export default function Debug() {
                 <p><strong>Test 1:</strong> Verifies HMAC-SHA256 using Web Crypto API matches expected signature for <code className="bg-muted px-1 rounded">{`{"test":"data"}`}</code> with secret <code className="bg-muted px-1 rounded">12345</code></p>
                 <p><strong>Test 2:</strong> Ensures <code className="bg-muted px-1 rounded">buildLegacyClientPayload()</code> correctly defaults empty arrays to prevent backend crashes</p>
                 <p><strong>Test 3:</strong> Validates the <code className="bg-muted px-1 rounded">clientBusiness</code> object is conditionally included based on the <code className="bg-muted px-1 rounded">isBusiness</code> flag</p>
+                <p><strong>Test 4:</strong> Pings the <code className="bg-muted px-1 rounded">drgreen-proxy</code> edge function to verify backend connectivity and response time</p>
               </CardContent>
             </Card>
           </div>
