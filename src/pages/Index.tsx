@@ -326,11 +326,24 @@ const Index = () => {
                   <motion.img 
                     src={hbIconCta} 
                     alt="Healing Buds" 
-                    className="mx-auto mb-6 h-28 w-auto object-contain"
+                    className="mx-auto mb-6 h-28 w-auto object-contain cursor-pointer"
                     initial={{ opacity: 0, scale: 0.8 }}
                     whileInView={{ opacity: 1, scale: 1 }}
                     viewport={{ once: true }}
                     transition={{ duration: 0.5 }}
+                    whileHover={{ 
+                      filter: "blur(8px) brightness(1.5)",
+                      opacity: 0.3,
+                      scale: 1.2,
+                      y: -10,
+                      transition: { 
+                        duration: 0.6, 
+                        ease: "easeOut" 
+                      }
+                    }}
+                    style={{ 
+                      willChange: "filter, opacity, transform"
+                    }}
                   />
                   <h2 className="font-display text-3xl md:text-4xl font-bold text-foreground mb-4">
                     Ready to Get Started?
