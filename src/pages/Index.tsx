@@ -22,6 +22,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { useShop } from "@/context/ShopContext";
 import heroVideo from "/hero-video.mp4";
 import hbLogoTeal from "@/assets/hb-logo-teal.png";
+import hbIconWhiteTraceability from "@/assets/hb-icon-white-traceability.png";
 import hbIconCta from "@/assets/hb-icon-cta.webp";
 
 const eligibilitySteps = [
@@ -97,7 +98,7 @@ const Index = () => {
                   transition={{ duration: 0.6 }}
                 >
                   <span className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-white/10 backdrop-blur-sm text-white text-sm font-medium mb-8 border border-white/20">
-                    <img src={hbLogoTeal} alt="" className="h-5 w-5 object-contain" />
+                    <img src={hbIconWhiteTraceability} alt="" className="h-5 w-5 object-contain" />
                     Seed to Sale Traceability
                   </span>
                   
