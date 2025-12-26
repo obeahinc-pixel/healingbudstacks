@@ -70,9 +70,34 @@ serve(async (req) => {
       );
     }
 
-    // Generate new branded product image using Lovable AI
-    // Prompt designed to match the exact HB branded jar style
-    const prompt = `Create a photorealistic, 4K ultra-high-definition product photograph of a premium medical cannabis glass jar with these EXACT specifications:
+    // Use the jar template as base and edit it to add cannabis buds
+    // First, get the jar template image from storage or use embedded base64
+    const jarTemplateUrl = `${SUPABASE_URL}/storage/v1/object/public/product-images/jar-template.jpg`;
+    
+    // Fetch the jar template
+    let jarTemplateBase64 = "";
+    try {
+      const templateResponse = await fetch(jarTemplateUrl);
+      if (templateResponse.ok) {
+        const templateBuffer = await templateResponse.arrayBuffer();
+        jarTemplateBase64 = btoa(String.fromCharCode(...new Uint8Array(templateBuffer)));
+      }
+    } catch (e) {
+      console.log("Could not fetch jar template, will generate from scratch");
+    }
+
+    const editPrompt = `Edit this medical cannabis jar image to add dense, frosty, high-quality cannabis buds of the "${productName}" strain inside the jar.
+
+REQUIREMENTS:
+- Keep the exact jar design, lid, labels, and branding unchanged
+- Fill the jar approximately 60-70% with realistic cannabis buds
+- Buds should show visible trichomes, rich green coloring with hints of purple/orange
+- Maintain the clean white background and professional lighting
+- Keep the "powered by Dr. Green" text and HB logo visible
+- Result should be 4K crystal-clear product photography quality
+- The buds should look dense, fresh, and premium quality`;
+
+    const generatePrompt = `Create a photorealistic, 4K ultra-high-definition product photograph of a premium medical cannabis glass jar with these EXACT specifications:
 
 JAR STYLE:
 - Clear glass squat jar (short and wide, NOT tall) with rounded edges
@@ -80,14 +105,13 @@ JAR STYLE:
 - On the lid: dark green circular badge with white "HB" medical leaf logo centered
 
 LABELING:
-- Green diagonal stripe label wrapping around the jar (from upper left to lower right)
+- Green diagonal stripe label wrapping around the jar
 - Clean white label area with strain name "${productName}" in elegant typography
 - Small "powered by Dr. Green" text at the bottom of the jar label
-- Batch/lot number area visible
 
 CONTENTS:
 - Dense, frosty, high-quality cannabis buds of the "${productName}" strain visible through the clear glass
-- Buds should show visible trichomes, rich green coloring with hints of purple/orange depending on strain
+- Buds should show visible trichomes, rich green coloring
 - Jar should be approximately 60-70% full with buds
 
 PHOTOGRAPHY STYLE:
@@ -95,12 +119,30 @@ PHOTOGRAPHY STYLE:
 - Soft studio lighting with gentle shadows
 - Front-facing view showing main label clearly
 - 4K crystal-clear product photography
-- Professional medical/pharmaceutical aesthetic
-- Magazine-worthy presentation quality
-
-This is for a premium medical cannabis brand - the image must look clean, professional, and trustworthy.`;
+- Professional medical/pharmaceutical aesthetic`;
 
     console.log("Calling Lovable AI for image generation...");
+
+    // Build the request based on whether we have a template
+    const messageContent: any[] = [
+      {
+        type: "text",
+        text: jarTemplateBase64 ? editPrompt : generatePrompt,
+      },
+    ];
+
+    // If we have the jar template, include it for editing
+    if (jarTemplateBase64) {
+      messageContent.push({
+        type: "image_url",
+        image_url: {
+          url: `data:image/jpeg;base64,${jarTemplateBase64}`,
+        },
+      });
+      console.log("Using jar template for image editing");
+    } else {
+      console.log("Generating image from scratch (no template found)");
+    }
 
     const aiResponse = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
       method: "POST",
@@ -113,7 +155,7 @@ This is for a premium medical cannabis brand - the image must look clean, profes
         messages: [
           {
             role: "user",
-            content: prompt,
+            content: messageContent,
           },
         ],
         modalities: ["image", "text"],
