@@ -518,7 +518,7 @@ export function ClientOnboarding() {
       setKycStatus('success');
       setCurrentStep(5); // Go to Complete step
 
-      // Send welcome email with KYC link (if available)
+      // Send welcome email
       try {
         console.log('[Registration] Sending welcome email...');
         await supabase.functions.invoke('send-client-email', {
@@ -535,6 +535,26 @@ export function ClientOnboarding() {
       } catch (emailError) {
         // Don't fail registration if email fails
         console.warn('[Registration] Failed to send welcome email:', emailError);
+      }
+
+      // Send dedicated KYC verification email if link is available
+      if (kycLink) {
+        try {
+          console.log('[Registration] Sending KYC verification email...');
+          await supabase.functions.invoke('send-client-email', {
+            body: {
+              type: 'kyc-link',
+              email: formData.personal?.email,
+              name: `${formData.personal?.firstName} ${formData.personal?.lastName}`,
+              region: formData.address?.country || 'global',
+              kycLink: kycLink,
+              clientId: clientId,
+            },
+          });
+          console.log('[Registration] KYC verification email sent successfully');
+        } catch (emailError) {
+          console.warn('[Registration] Failed to send KYC email:', emailError);
+        }
       }
 
       // Show appropriate toast based on API success
