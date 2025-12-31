@@ -11,7 +11,6 @@ import { RestrictedRegionGate } from '@/components/shop/RestrictedRegionGate';
 import { VerificationProgress } from '@/components/shop/VerificationProgress';
 
 import { useShop } from '@/context/ShopContext';
-import { useGeoLocation } from '@/hooks/useGeoLocation';
 import { useTranslation } from 'react-i18next';
 
 const countries = [
@@ -22,17 +21,10 @@ const countries = [
 ];
 
 export default function Shop() {
-  const { countryCode, setCountryCode, drGreenClient, isEligible, syncVerificationFromDrGreen } = useShop();
-  const geoLocation = useGeoLocation();
+  const { countryCode, drGreenClient, isEligible, syncVerificationFromDrGreen } = useShop();
   const { t } = useTranslation('shop');
 
-  // Auto-detect country on mount
-  useEffect(() => {
-    const supportedCountries = ['PT', 'ZA', 'TH', 'GB'];
-    if (supportedCountries.includes(geoLocation.countryCode) && !drGreenClient) {
-      setCountryCode(geoLocation.countryCode);
-    }
-  }, [geoLocation.countryCode, setCountryCode, drGreenClient]);
+  // NOTE: Country is determined by URL domain in ShopContext - no override needed here
 
   // Background polling for verification status (every 3 minutes)
   useEffect(() => {
