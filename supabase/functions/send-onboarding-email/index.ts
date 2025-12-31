@@ -48,7 +48,7 @@ const handler = async (req: Request): Promise<Response> => {
 
     const siteUrl = Deno.env.get("SITE_URL") || "https://healingbuds.com";
     const registrationUrl = `${siteUrl}/shop/register`;
-    const logoUrl = `${Deno.env.get('SUPABASE_URL')}/storage/v1/object/public/email-assets/hb-logo-white.png`;
+    const logoUrl = `${Deno.env.get('SUPABASE_URL')}/storage/v1/object/public/email-assets/hb-logo-teal.png`;
 
     const emailHtml = `
 <!DOCTYPE html>
@@ -66,9 +66,9 @@ const handler = async (req: Request): Promise<Response> => {
           
           <!-- Header -->
           <tr>
-            <td style="background: linear-gradient(135deg, #0d5c4d 0%, #1a7a6d 100%); padding: 40px; text-align: center; border-radius: 12px 12px 0 0;">
-              <img src="${logoUrl}" alt="Healing Buds" width="180" style="display: inline-block; max-width: 180px; height: auto;" />
-              <p style="color: rgba(255,255,255,0.9); margin: 12px 0 0 0; font-size: 14px;">
+            <td style="background-color: #ffffff; padding: 40px; text-align: center; border-radius: 12px 12px 0 0; border-bottom: 3px solid #0d5c4d;">
+              <img src="${logoUrl}" alt="Healing Buds" width="200" style="display: block; margin: 0 auto; max-width: 200px; height: auto;" />
+              <p style="color: #0d5c4d; margin: 16px 0 0 0; font-size: 14px; font-weight: 500;">
                 Medical Cannabis Care
               </p>
             </td>
