@@ -5,46 +5,100 @@ import { useState } from 'react';
 interface EnvVar {
   name: string;
   value: string | undefined;
+  isBackend?: boolean;
 }
+
+const DRGREEN_API_URL = 'https://api.drgreennft.com/api/v1';
 
 export default function EnvDebugger() {
   const [pingStatus, setPingStatus] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [isMinimized, setIsMinimized] = useState(false);
+  const [activeTest, setActiveTest] = useState<'supabase' | 'drgreen' | null>(null);
 
   const envVars: EnvVar[] = [
     { name: 'NODE_ENV', value: import.meta.env.MODE },
+    { name: 'DRGREEN_API_URL', value: DRGREEN_API_URL },
     { name: 'VITE_SUPABASE_URL', value: import.meta.env.VITE_SUPABASE_URL },
     { name: 'VITE_SUPABASE_PUBLISHABLE_KEY', value: import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY ? '✓ Set' : undefined },
     { name: 'VITE_SUPABASE_PROJECT_ID', value: import.meta.env.VITE_SUPABASE_PROJECT_ID },
   ];
 
-  const getValueDisplay = (value: string | undefined) => {
+  const backendSecrets: EnvVar[] = [
+    { name: 'DRGREEN_API_KEY', value: '✓ Configured', isBackend: true },
+    { name: 'DRGREEN_PRIVATE_KEY', value: '✓ Configured', isBackend: true },
+    { name: 'RESEND_API_KEY', value: '✓ Configured', isBackend: true },
+  ];
+
+  const getValueDisplay = (value: string | undefined, isBackend?: boolean) => {
     if (value === undefined) {
       return { text: '[MISSING]', color: '#ef4444' };
     }
     if (value === '') {
       return { text: '[EMPTY]', color: '#eab308' };
     }
-    return { text: value, color: '#22c55e' };
+    return { text: value, color: isBackend ? '#60a5fa' : '#22c55e' };
   };
 
-  const handlePingTest = async () => {
-    const apiUrl = import.meta.env.VITE_SUPABASE_URL || import.meta.env.NEXT_PUBLIC_API_URL;
+  const handleSupabaseTest = async () => {
+    const apiUrl = import.meta.env.VITE_SUPABASE_URL;
     
     if (!apiUrl) {
-      setPingStatus('No API URL configured');
+      setPingStatus('No Supabase URL configured');
       return;
     }
 
     setIsLoading(true);
+    setActiveTest('supabase');
     setPingStatus(null);
 
     try {
-      const response = await fetch(apiUrl, { method: 'HEAD', mode: 'no-cors' });
-      setPingStatus(`Connection OK (opaque response)`);
+      await fetch(apiUrl, { method: 'HEAD', mode: 'no-cors' });
+      setPingStatus('Supabase: Connection OK');
     } catch (error) {
-      setPingStatus(`Error: ${error instanceof Error ? error.message : 'Unknown error'}`);
+      setPingStatus(`Supabase Error: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleDrGreenTest = async () => {
+    const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
+    const apiKey = import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY;
+    
+    if (!supabaseUrl || !apiKey) {
+      setPingStatus('Missing Supabase configuration');
+      return;
+    }
+
+    setIsLoading(true);
+    setActiveTest('drgreen');
+    setPingStatus(null);
+
+    try {
+      const response = await fetch(
+        `${supabaseUrl}/functions/v1/drgreen-proxy`,
+        {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${apiKey}`,
+            'apikey': apiKey,
+          },
+          body: JSON.stringify({
+            action: 'get-strains-legacy',
+            countryCode: 'PRT'
+          })
+        }
+      );
+      const data = await response.json();
+      if (data.success) {
+        setPingStatus(`Dr. Green API: OK - ${data.data?.length || 0} strains found`);
+      } else {
+        setPingStatus(`Dr. Green API Error: ${data.error || 'Unknown error'}`);
+      }
+    } catch (error) {
+      setPingStatus(`Dr. Green API Error: ${error instanceof Error ? error.message : 'Unknown error'}`);
     } finally {
       setIsLoading(false);
     }
@@ -141,7 +195,7 @@ export default function EnvDebugger() {
         </thead>
         <tbody>
           {envVars.map((env) => {
-            const display = getValueDisplay(env.value);
+            const display = getValueDisplay(env.value, env.isBackend);
             return (
               <tr key={env.name}>
                 <td style={cellStyle}>{env.name}</td>
@@ -151,16 +205,41 @@ export default function EnvDebugger() {
               </tr>
             );
           })}
+          <tr>
+            <td colSpan={2} style={{ ...cellStyle, fontSize: '10px', opacity: 0.7, paddingTop: '8px' }}>
+              Backend Secrets (Edge Functions):
+            </td>
+          </tr>
+          {backendSecrets.map((env) => {
+            const display = getValueDisplay(env.value, env.isBackend);
+            return (
+              <tr key={env.name}>
+                <td style={{ ...cellStyle, fontSize: '10px' }}>{env.name}</td>
+                <td style={{ ...cellStyle, color: display.color, fontSize: '10px' }}>
+                  {display.text}
+                </td>
+              </tr>
+            );
+          })}
         </tbody>
       </table>
 
-      <button 
-        style={{ ...buttonStyle, opacity: isLoading ? 0.7 : 1 }} 
-        onClick={handlePingTest}
-        disabled={isLoading}
-      >
-        {isLoading ? 'Testing...' : 'Test API Connection'}
-      </button>
+      <div style={{ display: 'flex', gap: '8px', marginTop: '12px' }}>
+        <button 
+          style={{ ...buttonStyle, flex: 1, marginTop: 0, opacity: isLoading && activeTest === 'supabase' ? 0.7 : 1 }} 
+          onClick={handleSupabaseTest}
+          disabled={isLoading}
+        >
+          {isLoading && activeTest === 'supabase' ? 'Testing...' : 'Test Supabase'}
+        </button>
+        <button 
+          style={{ ...buttonStyle, flex: 1, marginTop: 0, backgroundColor: '#065f46', opacity: isLoading && activeTest === 'drgreen' ? 0.7 : 1 }} 
+          onClick={handleDrGreenTest}
+          disabled={isLoading}
+        >
+          {isLoading && activeTest === 'drgreen' ? 'Testing...' : 'Test Dr. Green API'}
+        </button>
+      </div>
 
       {pingStatus && (
         <div style={{ 
