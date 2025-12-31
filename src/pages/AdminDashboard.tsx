@@ -22,7 +22,11 @@ import {
   Loader2,
   DollarSign,
   RefreshCw,
-  Sparkles
+  Sparkles,
+  Wallet,
+  ExternalLink,
+  Copy,
+  Key
 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import Header from "@/layout/Header";
@@ -36,6 +40,10 @@ import { useToast } from "@/hooks/use-toast";
 import { useDrGreenApi } from "@/hooks/useDrGreenApi";
 import { BatchImageGenerator } from "@/components/admin/BatchImageGenerator";
 import { KYCJourneyViewer } from "@/components/admin/KYCJourneyViewer";
+import { useAccount, useDisconnect, useBalance, useChainId } from "wagmi";
+import { useDrGreenKeyOwnership } from "@/hooks/useNFTOwnership";
+import { useWallet } from "@/context/WalletContext";
+import { mainnet } from "wagmi/chains";
 
 interface DashboardStats {
   pendingPrescriptions: number;
@@ -72,6 +80,14 @@ const AdminDashboard = () => {
   const [adminUser, setAdminUser] = useState<AdminUser | null>(null);
   const [demoKycEnabled, setDemoKycEnabled] = useState(false);
   const [togglingKyc, setTogglingKyc] = useState(false);
+
+  // Wallet & NFT state
+  const { address, isConnected } = useAccount();
+  const { disconnect } = useDisconnect();
+  const chainId = useChainId();
+  const { data: balance } = useBalance({ address });
+  const { hasNFT, isLoading: nftLoading } = useDrGreenKeyOwnership();
+  const { openWalletModal } = useWallet();
 
   useEffect(() => {
     checkAdminStatus();
@@ -458,8 +474,8 @@ const AdminDashboard = () => {
               </Button>
             </div>
 
-            {/* Admin Account Info & Demo Settings */}
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-12">
+            {/* Admin Account Info, Wallet & Demo Settings */}
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-12">
               {/* Admin Account Info */}
               <Card className="border-primary/20">
                 <CardHeader>
@@ -499,6 +515,106 @@ const AdminDashboard = () => {
                       </p>
                     </div>
                   </div>
+                </CardContent>
+              </Card>
+
+              {/* Wallet Connection Card */}
+              <Card className={`border-2 ${hasNFT ? 'border-green-500/30 bg-gradient-to-br from-green-500/5 to-transparent' : 'border-primary/20'}`}>
+                <CardHeader>
+                  <div className="flex items-center gap-3">
+                    <div className={`p-2 rounded-lg ${hasNFT ? 'bg-green-500/10' : 'bg-primary/10'}`}>
+                      <Wallet className={`w-5 h-5 ${hasNFT ? 'text-green-500' : 'text-primary'}`} />
+                    </div>
+                    <div>
+                      <CardTitle className="text-lg">Wallet Connection</CardTitle>
+                      <CardDescription>Dr. Green Digital Key verification</CardDescription>
+                    </div>
+                  </div>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  {isConnected && address ? (
+                    <>
+                      {/* Wallet Address */}
+                      <div className="flex items-center gap-3 p-3 rounded-lg bg-muted/50">
+                        <Wallet className="w-4 h-4 text-muted-foreground" />
+                        <div className="flex-1 min-w-0">
+                          <p className="text-xs text-muted-foreground">Wallet</p>
+                          <div className="flex items-center gap-2">
+                            <p className="font-medium text-foreground font-mono text-sm truncate">
+                              {address.slice(0, 6)}...{address.slice(-4)}
+                            </p>
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              className="h-6 w-6"
+                              onClick={() => {
+                                navigator.clipboard.writeText(address);
+                                toast({ title: "Address copied" });
+                              }}
+                            >
+                              <Copy className="h-3 w-3" />
+                            </Button>
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              className="h-6 w-6"
+                              asChild
+                            >
+                              <a
+                                href={`https://etherscan.io/address/${address}`}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                              >
+                                <ExternalLink className="h-3 w-3" />
+                              </a>
+                            </Button>
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Network */}
+                      <div className="flex items-center gap-3 p-3 rounded-lg bg-muted/50">
+                        <div className={`w-2 h-2 rounded-full ${chainId === mainnet.id ? 'bg-green-500' : 'bg-amber-500'}`} />
+                        <div>
+                          <p className="text-xs text-muted-foreground">Network</p>
+                          <p className="font-medium text-foreground">
+                            {chainId === mainnet.id ? 'Ethereum Mainnet' : `Chain ID: ${chainId}`}
+                          </p>
+                        </div>
+                      </div>
+
+                      {/* Digital Key Status */}
+                      <div className={`flex items-center gap-3 p-3 rounded-lg ${hasNFT ? 'bg-green-500/10 border border-green-500/20' : 'bg-amber-500/10 border border-amber-500/20'}`}>
+                        <Key className={`w-4 h-4 ${hasNFT ? 'text-green-500' : 'text-amber-500'}`} />
+                        <div>
+                          <p className="text-xs text-muted-foreground">Digital Key Status</p>
+                          <p className={`font-medium ${hasNFT ? 'text-green-600 dark:text-green-400' : 'text-amber-600 dark:text-amber-400'}`}>
+                            {nftLoading ? 'Checking...' : hasNFT ? '✓ Verified Owner' : '✗ Not Found'}
+                          </p>
+                        </div>
+                      </div>
+
+                      {/* Disconnect Button */}
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        className="w-full"
+                        onClick={() => disconnect()}
+                      >
+                        Disconnect Wallet
+                      </Button>
+                    </>
+                  ) : (
+                    <div className="text-center py-4">
+                      <p className="text-sm text-muted-foreground mb-4">
+                        Connect your wallet to verify Digital Key ownership
+                      </p>
+                      <Button onClick={openWalletModal} className="w-full">
+                        <Wallet className="mr-2 h-4 w-4" />
+                        Connect Wallet
+                      </Button>
+                    </div>
+                  )}
                 </CardContent>
               </Card>
 

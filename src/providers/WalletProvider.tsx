@@ -1,8 +1,8 @@
 'use client';
 
 import { ReactNode } from 'react';
-import { WagmiProvider, createConfig, http } from 'wagmi';
-import { mainnet, polygon, sepolia } from 'wagmi/chains';
+import { WagmiProvider, http } from 'wagmi';
+import { mainnet } from 'wagmi/chains';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import {
   RainbowKitProvider,
@@ -12,15 +12,19 @@ import {
 } from '@rainbow-me/rainbowkit';
 import '@rainbow-me/rainbowkit/styles.css';
 
-// Configure chains and providers
+/**
+ * Wallet Configuration for Admin NFT Gating
+ * 
+ * - Ethereum Mainnet only (where Dr. Green Digital Key NFTs are deployed)
+ * - MetaMask and other ERC-721 compatible wallets supported via RainbowKit
+ * - Admin-only feature - not exposed to customer-facing UI
+ */
 const config = getDefaultConfig({
-  appName: 'Healing Buds',
-  projectId: 'healing-buds-dapp', // WalletConnect Cloud project ID placeholder
-  chains: [mainnet, polygon, sepolia],
+  appName: 'Healing Buds Admin',
+  projectId: 'healing-buds-admin', // WalletConnect Cloud project ID - replace with production ID
+  chains: [mainnet],
   transports: {
     [mainnet.id]: http(),
-    [polygon.id]: http(),
-    [sepolia.id]: http(),
   },
   ssr: false,
 });
@@ -59,6 +63,7 @@ export function WalletProvider({ children }: WalletProviderProps) {
             }),
           }}
           modalSize="compact"
+          initialChain={mainnet}
         >
           {children}
         </RainbowKitProvider>

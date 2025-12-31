@@ -13,6 +13,7 @@ import PageLoadingSkeleton from "@/components/PageLoadingSkeleton";
 import ErrorBoundary from "@/components/ErrorBoundary";
 import SkipLinks from "@/components/SkipLinks";
 import ProtectedRoute from "@/components/ProtectedRoute";
+import { ProtectedNFTRoute } from "@/components/ProtectedNFTRoute";
 
 import { ShopProvider } from "@/context/ShopContext";
 import { CursorProvider } from "@/context/CursorContext";
@@ -74,30 +75,40 @@ const AnimatedRoutes = () => {
           <Route path="/shop/cultivar/:cultivarId" element={<CultivarDetail />} />
           <Route path="/checkout" element={<Checkout />} />
           
-          {/* Protected Admin Routes */}
+          {/* Protected Admin Routes - Dual Auth: Supabase Role + NFT Ownership */}
           <Route path="/admin" element={
             <ProtectedRoute requiredRole="admin">
-              <AdminDashboard />
+              <ProtectedNFTRoute accessDeniedMessage="Admin access requires a Dr. Green Digital Key NFT on Ethereum Mainnet.">
+                <AdminDashboard />
+              </ProtectedNFTRoute>
             </ProtectedRoute>
           } />
           <Route path="/admin/prescriptions" element={
             <ProtectedRoute requiredRole="admin">
-              <AdminPrescriptions />
+              <ProtectedNFTRoute accessDeniedMessage="Admin access requires a Dr. Green Digital Key NFT.">
+                <AdminPrescriptions />
+              </ProtectedNFTRoute>
             </ProtectedRoute>
           } />
           <Route path="/admin/strains" element={
             <ProtectedRoute requiredRole="admin">
-              <AdminStrains />
+              <ProtectedNFTRoute accessDeniedMessage="Admin access requires a Dr. Green Digital Key NFT.">
+                <AdminStrains />
+              </ProtectedNFTRoute>
             </ProtectedRoute>
           } />
           <Route path="/admin/strain-sync" element={
             <ProtectedRoute requiredRole="admin">
-              <AdminStrainSync />
+              <ProtectedNFTRoute accessDeniedMessage="Admin access requires a Dr. Green Digital Key NFT.">
+                <AdminStrainSync />
+              </ProtectedNFTRoute>
             </ProtectedRoute>
           } />
           <Route path="/admin/strain-knowledge" element={
             <ProtectedRoute requiredRole="admin">
-              <AdminStrainKnowledge />
+              <ProtectedNFTRoute accessDeniedMessage="Admin access requires a Dr. Green Digital Key NFT.">
+                <AdminStrainKnowledge />
+              </ProtectedNFTRoute>
             </ProtectedRoute>
           } />
           
