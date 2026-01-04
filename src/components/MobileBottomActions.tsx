@@ -7,6 +7,7 @@ import { User } from "@supabase/supabase-js";
 import { useToast } from "@/hooks/use-toast";
 import { LogOut, ArrowRight, User as UserIcon } from "lucide-react";
 import { useTranslation } from "react-i18next";
+import { useTheme } from "next-themes";
 import { cn } from "@/lib/utils";
 
 interface MobileBottomActionsProps {
@@ -19,7 +20,8 @@ const MobileBottomActions = ({ menuOpen = false }: MobileBottomActionsProps) => 
   const navigate = useNavigate();
   const { toast } = useToast();
   const { t } = useTranslation('common');
-
+  const { resolvedTheme } = useTheme();
+  const isDark = resolvedTheme === 'dark';
   useEffect(() => {
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
       (event, session) => {
@@ -59,14 +61,16 @@ const MobileBottomActions = ({ menuOpen = false }: MobileBottomActionsProps) => 
             {/* Premium Pharmaceutical Container */}
             <div className="mx-4 mb-3">
               <div className={cn(
-                "rounded-3xl overflow-hidden",
-                "bg-gradient-to-r from-[hsl(var(--pharma-teal-dark))] via-[hsl(175,45%,22%)] to-[hsl(var(--pharma-teal-dark))]",
-                "backdrop-blur-xl",
-                "border border-white/10",
-                "shadow-[0_-8px_32px_-4px_rgba(0,0,0,0.25),inset_0_1px_0_0_rgba(255,255,255,0.1)]"
+                "rounded-3xl overflow-hidden backdrop-blur-xl",
+                isDark 
+                  ? "bg-[hsl(180,8%,10%)]/98 border border-white/20 shadow-[0_-8px_40px_-4px_rgba(0,0,0,0.4),inset_0_1px_0_0_rgba(255,255,255,0.05)]"
+                  : "bg-gradient-to-r from-[hsl(var(--pharma-teal-dark))] via-[hsl(175,45%,22%)] to-[hsl(var(--pharma-teal-dark))] border border-white/10 shadow-[0_-8px_32px_-4px_rgba(0,0,0,0.25),inset_0_1px_0_0_rgba(255,255,255,0.1)]"
               )}>
                 {/* Subtle top accent line */}
-                <div className="h-[1px] bg-gradient-to-r from-transparent via-emerald-400/40 to-transparent" />
+                <div className={cn(
+                  "h-[1px] bg-gradient-to-r from-transparent to-transparent",
+                  isDark ? "via-emerald-400/60" : "via-emerald-400/40"
+                )} />
                 
                 <div className="px-5 py-4">
                   <div className="flex gap-3">
@@ -77,14 +81,11 @@ const MobileBottomActions = ({ menuOpen = false }: MobileBottomActionsProps) => 
                       className={cn(
                         "flex-[1.2] group relative overflow-hidden",
                         "font-jakarta font-semibold px-6 py-4 rounded-2xl",
-                        "bg-gradient-to-r from-emerald-500 via-emerald-400 to-teal-400",
-                        "text-white",
-                        "shadow-[0_4px_20px_-4px_rgba(16,185,129,0.5),inset_0_1px_0_0_rgba(255,255,255,0.2)]",
-                        "transition-all duration-300 ease-out",
-                        "active:scale-[0.97] active:shadow-[0_2px_12px_-2px_rgba(16,185,129,0.4)]",
-                        "min-h-[56px]",
-                        "flex items-center justify-center gap-2.5",
-                        "touch-manipulation"
+                        "text-white min-h-[56px] flex items-center justify-center gap-2.5 touch-manipulation",
+                        "transition-all duration-300 ease-out active:scale-[0.97]",
+                        isDark
+                          ? "bg-gradient-to-r from-emerald-600 via-emerald-500 to-teal-500 shadow-[0_4px_24px_-4px_rgba(16,185,129,0.35),inset_0_1px_0_0_rgba(255,255,255,0.15)] active:shadow-[0_2px_16px_-2px_rgba(16,185,129,0.3)]"
+                          : "bg-gradient-to-r from-emerald-500 via-emerald-400 to-teal-400 shadow-[0_4px_20px_-4px_rgba(16,185,129,0.5),inset_0_1px_0_0_rgba(255,255,255,0.2)] active:shadow-[0_2px_12px_-2px_rgba(16,185,129,0.4)]"
                       )}
                     >
                       {/* Shine effect */}
@@ -102,16 +103,12 @@ const MobileBottomActions = ({ menuOpen = false }: MobileBottomActionsProps) => 
                         onClick={handleLogout}
                         className={cn(
                           "flex-1 group relative overflow-hidden",
-                          "font-jakarta font-medium px-5 py-4 rounded-2xl",
-                          "bg-white/8",
-                          "text-white/90 hover:text-white",
-                          "border border-white/15 hover:border-white/25",
-                          "backdrop-blur-sm",
-                          "transition-all duration-300 ease-out",
-                          "active:scale-[0.97] active:bg-white/12",
-                          "min-h-[56px]",
-                          "flex items-center justify-center gap-2",
-                          "touch-manipulation"
+                          "font-jakarta font-medium px-5 py-4 rounded-2xl backdrop-blur-sm",
+                          "transition-all duration-300 ease-out active:scale-[0.97]",
+                          "min-h-[56px] flex items-center justify-center gap-2 touch-manipulation",
+                          isDark
+                            ? "bg-white/10 text-white/95 border border-white/25 hover:border-white/35 active:bg-white/15"
+                            : "bg-white/8 text-white/90 hover:text-white border border-white/15 hover:border-white/25 active:bg-white/12"
                         )}
                       >
                         <LogOut className="w-4 h-4 opacity-80 group-hover:opacity-100 transition-opacity" />
@@ -122,16 +119,12 @@ const MobileBottomActions = ({ menuOpen = false }: MobileBottomActionsProps) => 
                         to="/auth"
                         className={cn(
                           "flex-1 group relative overflow-hidden",
-                          "font-jakarta font-medium px-5 py-4 rounded-2xl",
-                          "bg-white/8",
-                          "text-white/90 hover:text-white",
-                          "border border-white/15 hover:border-amber-400/30",
-                          "backdrop-blur-sm",
-                          "transition-all duration-300 ease-out",
-                          "active:scale-[0.97] active:bg-white/12",
-                          "min-h-[56px]",
-                          "flex items-center justify-center gap-2",
-                          "touch-manipulation"
+                          "font-jakarta font-medium px-5 py-4 rounded-2xl backdrop-blur-sm",
+                          "transition-all duration-300 ease-out active:scale-[0.97]",
+                          "min-h-[56px] flex items-center justify-center gap-2 touch-manipulation",
+                          isDark
+                            ? "bg-white/10 text-white/95 border border-white/25 hover:border-amber-400/40 active:bg-white/15"
+                            : "bg-white/8 text-white/90 hover:text-white border border-white/15 hover:border-amber-400/30 active:bg-white/12"
                         )}
                       >
                         {/* Subtle gold accent on hover */}
