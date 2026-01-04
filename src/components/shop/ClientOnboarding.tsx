@@ -1885,8 +1885,8 @@ export function ClientOnboarding() {
                         Your verification link has been sent. Check your email to continue.
                       </p>
                     </div>
-                    <Button onClick={() => navigate('/shop')}>
-                      Return to Shop
+                  <Button onClick={() => navigate('/dashboard/status')}>
+                      View Account Status
                     </Button>
                   </div>
                 ) : (
@@ -1924,8 +1924,8 @@ export function ClientOnboarding() {
                     <p className="text-xs text-muted-foreground">
                       Or check your email in the next 24 hours. If you don't receive it, please contact support.
                     </p>
-                    <Button onClick={() => navigate('/shop')}>
-                      Return to Shop
+                    <Button onClick={() => navigate('/dashboard/status')}>
+                      View Account Status
                     </Button>
                   </div>
                 )}

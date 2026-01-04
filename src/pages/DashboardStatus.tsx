@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useCallback } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import Header from '@/layout/Header';
 import Footer from '@/components/Footer';
@@ -7,8 +7,9 @@ import { useShop } from '@/context/ShopContext';
 import { supabase } from '@/integrations/supabase/client';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { CheckCircle2, Clock, Lock, UserCircle, FileText, Shield, Loader2 } from 'lucide-react';
+import { CheckCircle2, Clock, Lock, UserCircle, FileText, Shield, Loader2, RefreshCw } from 'lucide-react';
 import { motion } from 'framer-motion';
+import { useToast } from '@/hooks/use-toast';
 
 interface VerificationStep {
   id: string;
@@ -20,8 +21,40 @@ interface VerificationStep {
 
 export default function DashboardStatus() {
   const navigate = useNavigate();
-  const { drGreenClient, isLoading } = useShop();
+  const { drGreenClient, isLoading, syncVerificationFromDrGreen } = useShop();
   const [isAuthenticated, setIsAuthenticated] = useState<boolean | null>(null);
+  const [isSyncing, setIsSyncing] = useState(false);
+  const { toast } = useToast();
+
+  // Manual refresh handler
+  const handleRefreshStatus = useCallback(async () => {
+    setIsSyncing(true);
+    try {
+      await syncVerificationFromDrGreen();
+      toast({
+        title: 'Status Updated',
+        description: 'Your verification status has been refreshed.',
+      });
+    } catch (error) {
+      toast({
+        title: 'Refresh Failed',
+        description: 'Could not refresh status. Please try again.',
+        variant: 'destructive',
+      });
+    } finally {
+      setIsSyncing(false);
+    }
+  }, [syncVerificationFromDrGreen, toast]);
+
+  // Auto-sync for pending verifications every 30 seconds
+  useEffect(() => {
+    if (!isLoading && drGreenClient && !drGreenClient.is_kyc_verified) {
+      const interval = setInterval(() => {
+        syncVerificationFromDrGreen();
+      }, 30000);
+      return () => clearInterval(interval);
+    }
+  }, [drGreenClient, isLoading, syncVerificationFromDrGreen]);
 
   useEffect(() => {
     const checkAuth = async () => {
@@ -238,9 +271,25 @@ export default function DashboardStatus() {
                     })}
                   </div>
 
-                  {/* Action Button */}
-                  <div className="flex justify-center">
+                  {/* Action Buttons */}
+                  <div className="flex flex-col sm:flex-row gap-3 justify-center items-center">
                     {getActionButton()}
+                    {hasClient && (
+                      <Button
+                        variant="outline"
+                        size="lg"
+                        onClick={handleRefreshStatus}
+                        disabled={isSyncing}
+                        className="rounded-2xl"
+                      >
+                        {isSyncing ? (
+                          <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                        ) : (
+                          <RefreshCw className="mr-2 h-4 w-4" />
+                        )}
+                        Refresh Status
+                      </Button>
+                    )}
                   </div>
                 </CardContent>
               </Card>
