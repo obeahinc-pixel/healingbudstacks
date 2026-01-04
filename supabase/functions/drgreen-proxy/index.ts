@@ -209,13 +209,20 @@ async function signPayload(payload: string, secretKey: string): Promise<string> 
   const payloadData = encoder.encode(payload);
   const signatureBuffer = await crypto.subtle.sign("HMAC", cryptoKey, payloadData);
   
-  // Convert ArrayBuffer to base64 string
+  // Convert ArrayBuffer to lowercase hex string (matches PHP hash_hmac default output)
   const signatureBytes = new Uint8Array(signatureBuffer);
-  let binary = '';
-  for (let i = 0; i < signatureBytes.byteLength; i++) {
-    binary += String.fromCharCode(signatureBytes[i]);
-  }
-  return btoa(binary);
+  const hexSignature = Array.from(signatureBytes)
+    .map(b => b.toString(16).padStart(2, '0'))
+    .join('');
+  
+  // Debug logging - temporary
+  logInfo("Signature generated", {
+    signatureLength: hexSignature.length,  // Should be 64 chars for SHA-256 hex
+    signaturePreview: hexSignature.slice(0, 10) + "...",
+    payloadPreview: payload.slice(0, 50),
+  });
+  
+  return hexSignature;
 }
 
 /**
