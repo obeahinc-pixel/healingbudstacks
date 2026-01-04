@@ -7,6 +7,68 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
 
+// Log level configuration - defaults to INFO in production
+const LOG_LEVEL = Deno.env.get('LOG_LEVEL') || 'INFO';
+const LOG_LEVELS: Record<string, number> = { DEBUG: 0, INFO: 1, WARN: 2, ERROR: 3 };
+
+function shouldLog(level: string): boolean {
+  return LOG_LEVELS[level] >= LOG_LEVELS[LOG_LEVEL];
+}
+
+// Sanitized logging - never log sensitive data in production
+function logDebug(message: string, data?: Record<string, unknown>) {
+  if (shouldLog('DEBUG')) {
+    console.log(`[Debug] ${message}`, data ? sanitizeForLogging(data) : '');
+  }
+}
+
+function logInfo(message: string, data?: Record<string, unknown>) {
+  if (shouldLog('INFO')) {
+    console.log(`[Info] ${message}`, data ? sanitizeForLogging(data) : '');
+  }
+}
+
+function logWarn(message: string, data?: Record<string, unknown>) {
+  if (shouldLog('WARN')) {
+    console.warn(`[Warn] ${message}`, data ? sanitizeForLogging(data) : '');
+  }
+}
+
+function logError(message: string, data?: Record<string, unknown>) {
+  if (shouldLog('ERROR')) {
+    console.error(`[Error] ${message}`, data ? sanitizeForLogging(data) : '');
+  }
+}
+
+// Sanitize data for logging - redact sensitive fields
+function sanitizeForLogging(data: Record<string, unknown>): Record<string, unknown> {
+  const sensitiveFields = [
+    'email', 'phone', 'contactNumber', 'firstName', 'lastName', 
+    'dob', 'dateOfBirth', 'address', 'signature', 'apikey', 'token',
+    'medicalRecord', 'medicalHistory', 'password', 'secret', 'key',
+    'shipping', 'kycLink', 'payload'
+  ];
+  
+  const sanitized: Record<string, unknown> = {};
+  for (const [key, value] of Object.entries(data)) {
+    const lowerKey = key.toLowerCase();
+    const isSensitive = sensitiveFields.some(f => lowerKey.includes(f.toLowerCase()));
+    
+    if (isSensitive) {
+      if (typeof value === 'string') {
+        sanitized[key] = value.length > 6 ? `${value.slice(0, 3)}***${value.slice(-3)}` : '***';
+      } else {
+        sanitized[key] = '[REDACTED]';
+      }
+    } else if (typeof value === 'object' && value !== null) {
+      sanitized[key] = '[Object]';
+    } else {
+      sanitized[key] = value;
+    }
+  }
+  return sanitized;
+}
+
 // Admin-only actions that require admin role
 const ADMIN_ACTIONS = [
   'dashboard-summary', 'dashboard-analytics', 'sales-summary',
@@ -36,6 +98,35 @@ const OPEN_COUNTRIES = ['ZAF', 'THA'];
 
 // Authenticated but no ownership check needed
 const AUTH_ONLY_ACTIONS: string[] = [];
+
+/**
+ * Input validation schemas
+ */
+function validateClientId(clientId: unknown): boolean {
+  return typeof clientId === 'string' && clientId.length > 0 && clientId.length <= 100;
+}
+
+function validateCountryCode(code: unknown): boolean {
+  const validCodes = ['PT', 'PRT', 'GB', 'GBR', 'ZA', 'ZAF', 'TH', 'THA', 'US', 'USA'];
+  return typeof code === 'string' && (validCodes.includes(code.toUpperCase()) || code.length === 0);
+}
+
+function validatePagination(page: unknown, take: unknown): boolean {
+  const pageNum = Number(page);
+  const takeNum = Number(take);
+  return (!page || (pageNum >= 1 && pageNum <= 1000)) && 
+         (!take || (takeNum >= 1 && takeNum <= 100));
+}
+
+function validateEmail(email: unknown): boolean {
+  if (typeof email !== 'string') return false;
+  const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+  return emailRegex.test(email) && email.length <= 255;
+}
+
+function validateStringLength(value: unknown, maxLength: number): boolean {
+  return typeof value === 'string' && value.length <= maxLength;
+}
 
 /**
  * Verify user authentication and return user data
@@ -161,8 +252,7 @@ async function drGreenRequestBody(
   };
   
   const url = `${DRGREEN_API_URL}${endpoint}`;
-  console.log(`[DrGreen API - Body Sign] ${method} ${url}`);
-  console.log(`[DrGreen API] Payload for signing: ${payload}`);
+  logInfo(`API request: ${method} ${endpoint}`);
   
   const controller = new AbortController();
   const timeoutId = setTimeout(() => controller.abort(), API_TIMEOUT_MS);
@@ -218,8 +308,7 @@ async function drGreenRequestQuery(
   };
   
   const url = `${DRGREEN_API_URL}${endpoint}?${queryString}`;
-  console.log(`[DrGreen API - Query Sign] GET ${url}`);
-  console.log(`[DrGreen API] Query for signing: ${queryString}`);
+  logInfo(`API request: GET ${endpoint}`);
   
   const controller = new AbortController();
   const timeoutId = setTimeout(() => controller.abort(), API_TIMEOUT_MS);
@@ -279,7 +368,7 @@ serve(async (req) => {
     // Route handling
     const action = body?.action || apiPath;
     
-    console.log(`[DrGreen Proxy] Processing action: ${action}`, { method: req.method });
+    logInfo(`Processing action: ${action}`, { method: req.method });
 
     // ==========================================
     // AUTHENTICATION & AUTHORIZATION CHECK
@@ -299,35 +388,43 @@ serve(async (req) => {
     // Even if client sends an invalid/expired JWT, we ignore it for open country browsing.
     if (isCountryGatedAction) {
       const countryCode = (body?.countryCode || '').toString().toUpperCase().trim();
+      
+      // Validate country code input
+      if (countryCode && !validateCountryCode(countryCode)) {
+        return new Response(
+          JSON.stringify({ error: 'Invalid country code' }),
+          { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        );
+      }
+      
       const isOpenCountry = countryCode && OPEN_COUNTRIES.includes(countryCode);
       
       if (isOpenCountry) {
         // Open countries (ZAF, THA) bypass auth entirely - no JWT validation at all
-        console.log(`[Audit] Public access granted to ${action} for open country: ${countryCode}`);
+        logInfo(`Public access granted to ${action} for open country: ${countryCode}`);
         // Continue to route processing without any authentication check
       } else {
         // Restricted countries (GBR, PRT) or missing country require valid auth
         const authResult = await verifyAuthentication(req);
         
         if (!authResult) {
-          console.warn(`[Security] Auth required for ${action}, country: ${countryCode || 'unspecified'}`);
+          logWarn(`Auth required for ${action}`);
           return new Response(
             JSON.stringify({ 
               error: 'Authentication required. Please sign in to view products in your region.',
-              code: 401,
-              country: countryCode || null
+              code: 401
             }),
             { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } }
           );
         }
-        console.log(`[Audit] Authenticated user ${authResult.user.id} accessing ${action} for country: ${countryCode}`);
+        logInfo(`Authenticated user accessing ${action}`);
       }
     } else if (!isPublicAction) {
       // Non-country-gated, non-public actions require authentication
       const authResult = await verifyAuthentication(req);
       
       if (!authResult) {
-        console.warn(`[Security] Unauthenticated request to ${action}`);
+        logWarn(`Unauthenticated request to ${action}`);
         return new Response(
           JSON.stringify({ error: 'Authentication required' }),
           { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } }
@@ -341,13 +438,13 @@ serve(async (req) => {
         const hasAdminRole = await isAdmin(supabaseClient, user.id);
         
         if (!hasAdminRole) {
-          console.warn(`[Security] Non-admin user ${user.id} attempted to access ${action}`);
+          logWarn(`Non-admin attempted to access ${action}`);
           return new Response(
             JSON.stringify({ error: 'Admin access required' }),
             { status: 403, headers: { ...corsHeaders, "Content-Type": "application/json" } }
           );
         }
-        console.log(`[Audit] Admin ${user.id} (${user.email}) accessed ${action}`);
+        logInfo(`Admin accessed ${action}`);
       }
 
       // Verify resource ownership for client-specific operations
@@ -355,6 +452,14 @@ serve(async (req) => {
         const clientId = body?.clientId || body?.data?.clientId;
         
         if (clientId) {
+          // Validate clientId input
+          if (!validateClientId(clientId)) {
+            return new Response(
+              JSON.stringify({ error: 'Invalid client ID format' }),
+              { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+            );
+          }
+          
           // Check ownership or admin status
           const ownsResource = await verifyClientOwnership(supabaseClient, user.id, clientId);
           
@@ -362,7 +467,7 @@ serve(async (req) => {
             const hasAdminRole = await isAdmin(supabaseClient, user.id);
             
             if (!hasAdminRole) {
-              console.warn(`[Security] User ${user.id} attempted to access client ${clientId}`);
+              logWarn(`User attempted unauthorized access`);
               return new Response(
                 JSON.stringify({ error: 'Access denied' }),
                 { status: 403, headers: { ...corsHeaders, "Content-Type": "application/json" } }
@@ -375,7 +480,7 @@ serve(async (req) => {
       // Special case: create-client-legacy and create-client don't require ownership 
       // (new client creation) but do require authentication
       if (action === 'create-client-legacy' || action === 'create-client') {
-        console.log(`[Audit] User ${user.id} (${user.email}) creating new client`);
+        logInfo(`User creating new client`);
       }
     }
 
@@ -395,7 +500,15 @@ serve(async (req) => {
         const payload = body?.payload;
         if (!payload) throw new Error("Payload is required for client creation");
         
-        console.log("[DrGreen Proxy] Creating client with legacy payload:", JSON.stringify(payload, null, 2));
+        // Validate required fields
+        if (!validateEmail(payload.email)) {
+          throw new Error("Invalid email format");
+        }
+        if (!validateStringLength(payload.firstName, 100) || !validateStringLength(payload.lastName, 100)) {
+          throw new Error("Name fields exceed maximum length");
+        }
+        
+        logInfo("Creating client with legacy payload");
         response = await drGreenRequestBody("/clients/", "POST", payload);
         break;
       }
@@ -403,6 +516,12 @@ serve(async (req) => {
       // Get strains list with query signing (Method B - Query Sign)
       case "get-strains-legacy": {
         const { countryCode, orderBy, take, page } = body || {};
+        
+        // Validate pagination
+        if (!validatePagination(page, take)) {
+          throw new Error("Invalid pagination parameters");
+        }
+        
         const queryParams: Record<string, string | number> = {
           orderBy: orderBy || 'desc',
           take: take || 10,
@@ -418,6 +537,14 @@ serve(async (req) => {
       case "get-cart-legacy": {
         const { clientId, orderBy, take, page } = body || {};
         if (!clientId) throw new Error("clientId is required");
+        
+        // Validate inputs
+        if (!validateClientId(clientId)) {
+          throw new Error("Invalid client ID format");
+        }
+        if (!validatePagination(page, take)) {
+          throw new Error("Invalid pagination parameters");
+        }
         
         const queryParams: Record<string, string | number> = {
           orderBy: orderBy || 'desc',
@@ -444,6 +571,11 @@ serve(async (req) => {
         const { cartId, strainId } = body || {};
         if (!cartId || !strainId) throw new Error("cartId and strainId are required");
         
+        // Validate inputs
+        if (!validateStringLength(cartId, 100) || !validateStringLength(strainId, 100)) {
+          throw new Error("Invalid ID format");
+        }
+        
         // WordPress signs {"cartId": basketId} but passes strainId as query param
         const signPayloadData = { cartId };
         const signature = await signPayload(JSON.stringify(signPayloadData), Deno.env.get("DRGREEN_PRIVATE_KEY")!);
@@ -451,7 +583,7 @@ serve(async (req) => {
         const apiKey = Deno.env.get("DRGREEN_API_KEY")!;
         const apiUrl = `${DRGREEN_API_URL}/carts/${cartId}?strainId=${strainId}`;
         
-        console.log(`[DrGreen API - Remove Cart] DELETE ${apiUrl}`);
+        logInfo(`Removing item from cart`);
         
         const controller = new AbortController();
         const timeoutId = setTimeout(() => controller.abort(), API_TIMEOUT_MS);
@@ -515,8 +647,13 @@ serve(async (req) => {
       
       case "dapp-clients": {
         const { page, take, orderBy, search, searchBy, status, kyc, adminApproval } = body || {};
+        
+        if (!validatePagination(page, take)) {
+          throw new Error("Invalid pagination parameters");
+        }
+        
         let queryParams = `?orderBy=${orderBy || 'desc'}&take=${take || 10}&page=${page || 1}`;
-        if (search) queryParams += `&search=${encodeURIComponent(search)}`;
+        if (search) queryParams += `&search=${encodeURIComponent(String(search).slice(0, 100))}`;
         if (searchBy) queryParams += `&searchBy=${searchBy}`;
         if (status) queryParams += `&status=${status}`;
         if (kyc) queryParams += `&kyc=${kyc}`;
@@ -528,6 +665,7 @@ serve(async (req) => {
       case "dapp-client-details": {
         const { clientId } = body || {};
         if (!clientId) throw new Error("clientId is required");
+        if (!validateClientId(clientId)) throw new Error("Invalid client ID format");
         response = await drGreenRequest(`/dapp/clients/${clientId}`, "GET");
         break;
       }
@@ -535,14 +673,20 @@ serve(async (req) => {
       case "dapp-verify-client": {
         const { clientId, action: verifyAction } = body || {};
         if (!clientId || !verifyAction) throw new Error("clientId and action are required");
+        if (!validateClientId(clientId)) throw new Error("Invalid client ID format");
         response = await drGreenRequest(`/dapp/clients/${clientId}/${verifyAction}`, "PATCH");
         break;
       }
       
       case "dapp-orders": {
         const { page, take, orderBy, search, searchBy, adminApproval, clientIds } = body || {};
+        
+        if (!validatePagination(page, take)) {
+          throw new Error("Invalid pagination parameters");
+        }
+        
         let queryParams = `?orderBy=${orderBy || 'desc'}&take=${take || 10}&page=${page || 1}`;
-        if (search) queryParams += `&search=${encodeURIComponent(search)}`;
+        if (search) queryParams += `&search=${encodeURIComponent(String(search).slice(0, 100))}`;
         if (searchBy) queryParams += `&searchBy=${searchBy}`;
         if (adminApproval) queryParams += `&adminApproval=${adminApproval}`;
         if (clientIds) queryParams += `&clientIds=${JSON.stringify(clientIds)}`;
@@ -553,6 +697,7 @@ serve(async (req) => {
       case "dapp-order-details": {
         const { orderId } = body || {};
         if (!orderId) throw new Error("orderId is required");
+        if (!validateStringLength(orderId, 100)) throw new Error("Invalid order ID format");
         response = await drGreenRequest(`/dapp/orders/${orderId}`, "GET");
         break;
       }
@@ -560,14 +705,20 @@ serve(async (req) => {
       case "dapp-update-order": {
         const { orderId, orderStatus, paymentStatus } = body || {};
         if (!orderId) throw new Error("orderId is required");
+        if (!validateStringLength(orderId, 100)) throw new Error("Invalid order ID format");
         response = await drGreenRequest(`/dapp/orders/${orderId}`, "PATCH", { orderStatus, paymentStatus });
         break;
       }
       
       case "dapp-carts": {
         const { page, take, orderBy, search, searchBy } = body || {};
+        
+        if (!validatePagination(page, take)) {
+          throw new Error("Invalid pagination parameters");
+        }
+        
         let queryParams = `?orderBy=${orderBy || 'desc'}&take=${take || 10}&page=${page || 1}`;
-        if (search) queryParams += `&search=${encodeURIComponent(search)}`;
+        if (search) queryParams += `&search=${encodeURIComponent(String(search).slice(0, 100))}`;
         if (searchBy) queryParams += `&searchBy=${searchBy}`;
         response = await drGreenRequest(`/dapp/carts${queryParams}`, "GET");
         break;
@@ -580,9 +731,14 @@ serve(async (req) => {
       
       case "dapp-strains": {
         const { countryCode, orderBy, search, searchBy } = body || {};
+        
+        if (countryCode && !validateCountryCode(countryCode)) {
+          throw new Error("Invalid country code");
+        }
+        
         let queryParams = `?orderBy=${orderBy || 'desc'}`;
         if (countryCode) queryParams += `&countryCode=${countryCode}`;
-        if (search) queryParams += `&search=${encodeURIComponent(search)}`;
+        if (search) queryParams += `&search=${encodeURIComponent(String(search).slice(0, 100))}`;
         if (searchBy) queryParams += `&searchBy=${searchBy}`;
         response = await drGreenRequest(`/dapp/strains${queryParams}`, "GET");
         break;
@@ -604,6 +760,11 @@ serve(async (req) => {
       case "create-client": {
         const { personal, address, medicalRecord } = body.data || {};
         
+        // Validate email
+        if (personal?.email && !validateEmail(personal.email)) {
+          throw new Error("Invalid email format");
+        }
+        
         // Build schema-compliant payload for KYC API
         const kycPayload = {
           transaction_metadata: {
@@ -612,40 +773,40 @@ serve(async (req) => {
             flow_type: "Onboarding_KYC_v1"
           },
           user_identity: {
-            first_name: personal?.firstName || "",
-            last_name: personal?.lastName || "",
+            first_name: String(personal?.firstName || "").slice(0, 100),
+            last_name: String(personal?.lastName || "").slice(0, 100),
             dob: personal?.dateOfBirth || "",
-            email: personal?.email || "",
-            phone_number: personal?.phone || ""
+            email: String(personal?.email || "").toLowerCase().slice(0, 255),
+            phone_number: String(personal?.phone || "").slice(0, 20)
           },
           eligibility_results: {
             age_verified: true,
             region_eligible: true,
-            postal_code: address?.postalCode || "",
-            country_code: address?.country || "PT",
+            postal_code: String(address?.postalCode || "").slice(0, 20),
+            country_code: String(address?.country || "PT").slice(0, 3),
             declared_medical_patient: medicalRecord?.doctorApproval || false
           },
           shipping_address: {
-            street: address?.street || "",
-            city: address?.city || "",
-            postal_code: address?.postalCode || "",
-            country: address?.country || "PT"
+            street: String(address?.street || "").slice(0, 200),
+            city: String(address?.city || "").slice(0, 100),
+            postal_code: String(address?.postalCode || "").slice(0, 20),
+            country: String(address?.country || "PT").slice(0, 3)
           },
           medical_record: {
-            conditions: medicalRecord?.conditions || "",
-            current_medications: medicalRecord?.currentMedications || "",
-            allergies: medicalRecord?.allergies || "",
+            conditions: String(medicalRecord?.conditions || "").slice(0, 2000),
+            current_medications: String(medicalRecord?.currentMedications || "").slice(0, 1000),
+            allergies: String(medicalRecord?.allergies || "").slice(0, 500),
             previous_cannabis_use: medicalRecord?.previousCannabisUse || false
           },
           kyc_requirements: {
             document_type: "Government_ID",
-            id_country: address?.country || "PT",
+            id_country: String(address?.country || "PT").slice(0, 3),
             selfie_required: true,
             liveness_check: "active"
           }
         };
         
-        console.log("Creating client with KYC payload:", JSON.stringify(kycPayload, null, 2));
+        logInfo("Creating client with KYC payload");
         response = await drGreenRequest("/dapp/clients", "POST", kycPayload);
         break;
       }
@@ -656,6 +817,9 @@ serve(async (req) => {
         if (!clientId) {
           throw new Error("clientId is required for KYC link request");
         }
+        if (!validateClientId(clientId)) {
+          throw new Error("Invalid client ID format");
+        }
         
         const kycLinkPayload = {
           transaction_metadata: {
@@ -665,24 +829,27 @@ serve(async (req) => {
           },
           client_id: clientId,
           user_identity: {
-            first_name: personal?.firstName || "",
-            last_name: personal?.lastName || "",
-            email: personal?.email || ""
+            first_name: String(personal?.firstName || "").slice(0, 100),
+            last_name: String(personal?.lastName || "").slice(0, 100),
+            email: String(personal?.email || "").toLowerCase().slice(0, 255)
           },
           kyc_requirements: {
             document_type: "Government_ID",
-            id_country: address?.country || "PT",
+            id_country: String(address?.country || "PT").slice(0, 3),
             selfie_required: true,
             liveness_check: "active"
           }
         };
         
-        console.log("Requesting KYC link with payload:", JSON.stringify(kycLinkPayload, null, 2));
+        logInfo("Requesting KYC link");
         response = await drGreenRequest(`/dapp/clients/${clientId}/kyc-link`, "POST", kycLinkPayload);
         break;
       }
       
       case "get-client": {
+        if (!validateClientId(body.clientId)) {
+          throw new Error("Invalid client ID format");
+        }
         // Method A - Body Sign: signs {"clientId": "..."}
         const signBody = { clientId: body.clientId };
         response = await drGreenRequestBody(`/clients/${body.clientId}`, "GET", signBody);
@@ -690,24 +857,33 @@ serve(async (req) => {
       }
       
       case "update-client": {
+        if (!validateClientId(body.clientId)) {
+          throw new Error("Invalid client ID format");
+        }
         response = await drGreenRequest(`/dapp/clients/${body.clientId}`, "PUT", body.data);
         break;
       }
       
       case "get-strains": {
         const countryCode = body?.countryCode || "PRT";
-        console.log(`Fetching strains for country: ${countryCode}`);
+        if (!validateCountryCode(countryCode)) {
+          throw new Error("Invalid country code");
+        }
+        logInfo(`Fetching strains for country: ${countryCode}`);
         response = await drGreenRequest(`/dapp/strains?countryCode=${countryCode}`, "GET");
         break;
       }
       
       case "get-all-strains": {
-        console.log("Fetching all strains (no country filter)");
+        logInfo("Fetching all strains");
         response = await drGreenRequest("/dapp/strains", "GET");
         break;
       }
       
       case "get-strain": {
+        if (!validateStringLength(body.strainId, 100)) {
+          throw new Error("Invalid strain ID format");
+        }
         // Method A - Body Sign: signs {"strainId": "..."}
         const signBody = { strainId: body.strainId };
         response = await drGreenRequestBody(`/strains/${body.strainId}`, "GET", signBody);
@@ -720,11 +896,17 @@ serve(async (req) => {
       }
       
       case "update-cart": {
+        if (!validateStringLength(body.cartId, 100)) {
+          throw new Error("Invalid cart ID format");
+        }
         response = await drGreenRequest(`/dapp/carts/${body.cartId}`, "PUT", body.data);
         break;
       }
       
       case "get-cart": {
+        if (!validateStringLength(body.cartId, 100)) {
+          throw new Error("Invalid cart ID format");
+        }
         response = await drGreenRequest(`/dapp/carts/${body.cartId}`, "GET");
         break;
       }
@@ -735,6 +917,9 @@ serve(async (req) => {
       }
       
       case "get-order": {
+        if (!validateStringLength(body.orderId, 100)) {
+          throw new Error("Invalid order ID format");
+        }
         // Method A - Body Sign: signs {"orderId": "..."}
         const signBody = { orderId: body.orderId };
         response = await drGreenRequestBody(`/orders/${body.orderId}`, "GET", signBody);
@@ -742,11 +927,17 @@ serve(async (req) => {
       }
       
       case "update-order": {
+        if (!validateStringLength(body.orderId, 100)) {
+          throw new Error("Invalid order ID format");
+        }
         response = await drGreenRequest(`/dapp/orders/${body.orderId}`, "PATCH", body.data);
         break;
       }
       
       case "get-orders": {
+        if (!validateClientId(body.clientId)) {
+          throw new Error("Invalid client ID format");
+        }
         // Method A - Body Sign: signs {"clientId": "..."}
         const signBody = { clientId: body.clientId };
         response = await drGreenRequestBody(`/client/${body.clientId}/orders`, "GET", signBody);
@@ -759,6 +950,9 @@ serve(async (req) => {
       }
       
       case "get-payment": {
+        if (!validateStringLength(body.paymentId, 100)) {
+          throw new Error("Invalid payment ID format");
+        }
         response = await drGreenRequest(`/dapp/payments/${body.paymentId}`, "GET");
         break;
       }
@@ -771,7 +965,7 @@ serve(async (req) => {
     }
     
     const data = await response.json();
-    console.log(`[DrGreen API] Response status: ${response.status}`);
+    logInfo(`Response status: ${response.status}`);
     
     return new Response(JSON.stringify(data), {
       status: response.status,
@@ -780,13 +974,13 @@ serve(async (req) => {
     
   } catch (error: unknown) {
     const message = error instanceof Error ? error.message : 'Unknown error';
-    console.error("[DrGreen Proxy] Error:", error);
+    logError("Proxy error", { message });
     
     // Determine appropriate status code
     let statusCode = 500;
     if (message.includes('timed out')) {
       statusCode = 504; // Gateway Timeout
-    } else if (message.includes('required')) {
+    } else if (message.includes('required') || message.includes('Invalid')) {
       statusCode = 400; // Bad Request
     } else if (message.includes('Unprocessable') || message.includes('422')) {
       statusCode = 422; // Unprocessable Entity (e.g., blurry ID)

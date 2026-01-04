@@ -6,6 +6,53 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type, x-webhook-signature',
 };
 
+// Log level configuration - defaults to INFO in production
+const LOG_LEVEL = Deno.env.get('LOG_LEVEL') || 'INFO';
+const LOG_LEVELS: Record<string, number> = { DEBUG: 0, INFO: 1, WARN: 2, ERROR: 3 };
+
+function shouldLog(level: string): boolean {
+  return LOG_LEVELS[level] >= LOG_LEVELS[LOG_LEVEL];
+}
+
+function logInfo(message: string, data?: Record<string, unknown>) {
+  if (shouldLog('INFO')) {
+    console.log(`[Info] ${message}`, data ? sanitizeForLogging(data) : '');
+  }
+}
+
+function logWarn(message: string, data?: Record<string, unknown>) {
+  if (shouldLog('WARN')) {
+    console.warn(`[Warn] ${message}`, data ? sanitizeForLogging(data) : '');
+  }
+}
+
+function logError(message: string, data?: Record<string, unknown>) {
+  if (shouldLog('ERROR')) {
+    console.error(`[Error] ${message}`, data ? sanitizeForLogging(data) : '');
+  }
+}
+
+// Sanitize data for logging - redact sensitive fields
+function sanitizeForLogging(data: Record<string, unknown>): Record<string, unknown> {
+  const sensitiveFields = ['email', 'phone', 'name', 'signature', 'kycLink', 'rejectionReason'];
+  const sanitized: Record<string, unknown> = {};
+  for (const [key, value] of Object.entries(data)) {
+    const lowerKey = key.toLowerCase();
+    const isSensitive = sensitiveFields.some(f => lowerKey.includes(f.toLowerCase()));
+    if (isSensitive && typeof value === 'string') {
+      sanitized[key] = value.length > 6 ? `${value.slice(0, 3)}***` : '***';
+    } else if (typeof value === 'object' && value !== null) {
+      sanitized[key] = '[Object]';
+    } else {
+      sanitized[key] = value;
+    }
+  }
+  return sanitized;
+}
+
+// Webhook timestamp validation (max 5 minutes old)
+const MAX_WEBHOOK_AGE_MS = 5 * 60 * 1000;
+
 // Multi-domain configuration for Healing Buds regions
 const DOMAIN_CONFIG: Record<string, { domain: string; brandName: string }> = {
   'ZA': { domain: 'healingbuds.co.za', brandName: 'Healing Buds South Africa' },
@@ -30,9 +77,40 @@ async function verifyWebhookSignature(payload: string, signature: string, secret
     
     return hashHex === signature || btoa(String.fromCharCode(...new Uint8Array(hashBuffer))) === signature;
   } catch (error) {
-    console.error('Signature verification error:', error);
+    logError('Signature verification error');
     return false;
   }
+}
+
+// Validate webhook timestamp to prevent replay attacks
+function validateWebhookTimestamp(timestamp: string): boolean {
+  try {
+    const webhookTime = new Date(timestamp).getTime();
+    const now = Date.now();
+    const age = now - webhookTime;
+    
+    // Reject webhooks older than 5 minutes or from the future
+    if (age > MAX_WEBHOOK_AGE_MS || age < -60000) {
+      logWarn('Webhook timestamp validation failed', { age: Math.round(age / 1000) });
+      return false;
+    }
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+// Validate client state transitions
+const VALID_STATE_TRANSITIONS: Record<string, string[]> = {
+  'PENDING': ['VERIFIED', 'REJECTED'],
+  'VERIFIED': ['REJECTED'], // Admin can revoke
+  'REJECTED': ['PENDING'], // User can retry
+};
+
+function isValidStateTransition(currentState: string | null, newState: string): boolean {
+  const current = currentState || 'PENDING';
+  const validNext = VALID_STATE_TRANSITIONS[current] || [];
+  return validNext.includes(newState);
 }
 
 interface WebhookPayload {
@@ -52,6 +130,30 @@ interface WebhookPayload {
   stock?: number;
   availability?: boolean;
   countryCode?: string;
+}
+
+// Validate webhook payload structure
+function validateWebhookPayload(payload: unknown): payload is WebhookPayload {
+  if (typeof payload !== 'object' || payload === null) return false;
+  const p = payload as Record<string, unknown>;
+  
+  // Required fields
+  if (typeof p.event !== 'string' || p.event.length === 0 || p.event.length > 100) return false;
+  if (typeof p.timestamp !== 'string') return false;
+  
+  // Optional string fields validation
+  const stringFields = ['orderId', 'clientId', 'strainId', 'status', 'paymentStatus', 'kycStatus', 'adminApproval', 'rejectionReason', 'kycLink', 'countryCode'];
+  for (const field of stringFields) {
+    if (p[field] !== undefined && (typeof p[field] !== 'string' || (p[field] as string).length > 500)) {
+      return false;
+    }
+  }
+  
+  // Optional number fields validation
+  if (p.stock !== undefined && (typeof p.stock !== 'number' || p.stock < 0)) return false;
+  if (p.availability !== undefined && typeof p.availability !== 'boolean') return false;
+  
+  return true;
 }
 
 // Email template for order status updates
@@ -140,15 +242,13 @@ function getOrderStatusEmail(orderId: string, status: string, event: string, con
 async function sendEmail(to: string, subject: string, html: string, config: typeof DOMAIN_CONFIG['global']): Promise<boolean> {
   const RESEND_API_KEY = Deno.env.get("RESEND_API_KEY");
   if (!RESEND_API_KEY) {
-    console.log('RESEND_API_KEY not configured, skipping email');
+    logInfo('RESEND_API_KEY not configured, skipping email');
     return false;
   }
 
   try {
     // Use verified domain or fallback to resend.dev
     const fromAddress = `${config.brandName} <onboarding@resend.dev>`;
-    // Once domains are verified, uncomment this:
-    // const fromAddress = `${config.brandName} <noreply@${config.domain}>`;
 
     const response = await fetch('https://api.resend.com/emails', {
       method: 'POST',
@@ -167,14 +267,14 @@ async function sendEmail(to: string, subject: string, html: string, config: type
     const data = await response.json();
     
     if (!response.ok) {
-      console.error('Resend API error:', data);
+      logError('Resend API error');
       return false;
     }
 
-    console.log('Email sent successfully:', data);
+    logInfo('Email sent successfully');
     return true;
   } catch (error) {
-    console.error('Email sending failed:', error);
+    logError('Email sending failed');
     return false;
   }
 }
@@ -210,14 +310,14 @@ async function sendClientEmail(
     const data = await response.json();
     
     if (!response.ok) {
-      console.error('send-client-email error:', data);
+      logError('send-client-email error');
       return false;
     }
 
-    console.log(`Client email (${type}) sent successfully:`, data);
+    logInfo(`Client email (${type}) sent successfully`);
     return true;
   } catch (error) {
-    console.error('Client email sending failed:', error);
+    logError('Client email sending failed');
     return false;
   }
 }
@@ -231,16 +331,26 @@ async function logJourneyEvent(
   eventData: Record<string, unknown> = {}
 ): Promise<void> {
   try {
+    // Sanitize event data before storing
+    const sanitizedData: Record<string, unknown> = {};
+    for (const [key, value] of Object.entries(eventData)) {
+      if (typeof value === 'boolean' || typeof value === 'number') {
+        sanitizedData[key] = value;
+      } else if (typeof value === 'string' && value.length <= 500) {
+        sanitizedData[key] = value;
+      }
+    }
+    
     await supabase.from('kyc_journey_logs').insert({
       user_id: userId,
       client_id: clientId,
       event_type: eventType,
       event_source: 'drgreen-webhook',
-      event_data: eventData,
+      event_data: sanitizedData,
     });
-    console.log(`[KYC Journey] Logged: ${eventType}`, eventData);
+    logInfo(`KYC Journey logged: ${eventType}`);
   } catch (error) {
-    console.warn('[KYC Journey] Failed to log event:', error);
+    logWarn('Failed to log KYC journey event');
   }
 }
 
@@ -261,19 +371,48 @@ serve(async (req) => {
     const signature = req.headers.get('x-webhook-signature') || '';
     const privateKey = Deno.env.get("DRGREEN_PRIVATE_KEY");
 
+    // Verify webhook signature (required)
     if (privateKey && signature) {
       const isValid = await verifyWebhookSignature(rawPayload, signature, privateKey);
       if (!isValid) {
-        console.error('Invalid webhook signature');
+        logError('Invalid webhook signature');
         return new Response(
           JSON.stringify({ error: "Invalid signature" }),
           { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } }
         );
       }
+    } else if (privateKey) {
+      // If we have a key but no signature, reject
+      logError('Missing webhook signature');
+      return new Response(
+        JSON.stringify({ error: "Missing signature" }),
+        { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
     }
 
-    const payload: WebhookPayload = JSON.parse(rawPayload);
-    console.log('Received webhook:', payload);
+    const parsedPayload = JSON.parse(rawPayload);
+    
+    // Validate payload structure
+    if (!validateWebhookPayload(parsedPayload)) {
+      logError('Invalid webhook payload structure');
+      return new Response(
+        JSON.stringify({ error: "Invalid payload structure" }),
+        { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+    
+    const payload: WebhookPayload = parsedPayload;
+    
+    // Validate timestamp to prevent replay attacks
+    if (!validateWebhookTimestamp(payload.timestamp)) {
+      logError('Webhook timestamp validation failed');
+      return new Response(
+        JSON.stringify({ error: "Webhook expired or invalid timestamp" }),
+        { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+    
+    logInfo('Processing webhook', { event: payload.event });
 
     const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
     const supabaseServiceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
@@ -283,147 +422,169 @@ serve(async (req) => {
 
     // Handle KYC and client-related events
     if (payload.clientId && (payload.event.startsWith('kyc.') || payload.event.startsWith('client.'))) {
-      console.log(`Processing client event: ${payload.event} for client ${payload.clientId}`);
+      logInfo(`Processing client event: ${payload.event}`);
 
-      // Get client data from database
-      const { data: clientData } = await supabase
+      // Verify clientId exists in database
+      const { data: clientData, error: clientError } = await supabase
         .from('drgreen_clients')
-        .select('user_id, country_code')
+        .select('user_id, country_code, admin_approval')
         .eq('drgreen_client_id', payload.clientId)
         .single();
 
-      if (clientData?.user_id) {
-        const { data: userData } = await supabase.auth.admin.getUserById(clientData.user_id);
-        const userEmail = userData?.user?.email;
-        const userName = userData?.user?.user_metadata?.full_name || 'Patient';
-        const region = clientData.country_code || 'global';
+      if (clientError || !clientData?.user_id) {
+        logWarn('Client not found for webhook', { clientId: payload.clientId?.slice(0, 10) });
+        return new Response(
+          JSON.stringify({ error: "Client not found" }),
+          { status: 404, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        );
+      }
 
-        if (userEmail) {
-          switch (payload.event) {
-            case 'kyc.link_generated': {
-              // Send KYC link email
-              if (payload.kycLink) {
-                // Update KYC link in database
-                await supabase
-                  .from('drgreen_clients')
-                  .update({ kyc_link: payload.kycLink })
-                  .eq('drgreen_client_id', payload.clientId);
+      const { data: userData } = await supabase.auth.admin.getUserById(clientData.user_id);
+      const userEmail = userData?.user?.email;
+      const userName = userData?.user?.user_metadata?.full_name || 'Patient';
+      const region = clientData.country_code || 'global';
 
-                emailSent = await sendClientEmail(
-                  supabaseUrl,
-                  supabaseServiceKey,
-                  'kyc-link',
-                  userEmail,
-                  userName,
-                  region,
-                  payload.kycLink
-                );
-                
-                // Log journey event
-                await logJourneyEvent(supabase, clientData.user_id, payload.clientId, 'kyc.link_generated', {
-                  emailSent,
-                  linkPresent: !!payload.kycLink,
-                });
-              }
-              break;
-            }
-            case 'kyc.verified':
-            case 'kyc.approved': {
-              // Update database
+      if (userEmail) {
+        switch (payload.event) {
+          case 'kyc.link_generated': {
+            // Send KYC link email
+            if (payload.kycLink) {
+              // Update KYC link in database
               await supabase
                 .from('drgreen_clients')
-                .update({ is_kyc_verified: true })
+                .update({ kyc_link: payload.kycLink })
                 .eq('drgreen_client_id', payload.clientId);
 
               emailSent = await sendClientEmail(
                 supabaseUrl,
                 supabaseServiceKey,
-                'kyc-approved',
-                userEmail,
-                userName,
-                region
-              );
-              
-              // Log journey event
-              await logJourneyEvent(supabase, clientData.user_id, payload.clientId, payload.event, {
-                emailSent,
-                status: 'verified',
-              });
-              break;
-            }
-            case 'kyc.rejected':
-            case 'kyc.failed': {
-              emailSent = await sendClientEmail(
-                supabaseUrl,
-                supabaseServiceKey,
-                'kyc-rejected',
+                'kyc-link',
                 userEmail,
                 userName,
                 region,
-                payload.kycLink,
-                payload.rejectionReason
+                payload.kycLink
               );
               
               // Log journey event
-              await logJourneyEvent(supabase, clientData.user_id, payload.clientId, payload.event, {
+              await logJourneyEvent(supabase, clientData.user_id, payload.clientId, 'kyc.link_generated', {
                 emailSent,
-                status: 'rejected',
-                rejectionReason: payload.rejectionReason,
+                linkPresent: !!payload.kycLink,
               });
-              break;
             }
-            case 'client.approved': {
-              // Update database
-              await supabase
-                .from('drgreen_clients')
-                .update({ admin_approval: 'VERIFIED' })
-                .eq('drgreen_client_id', payload.clientId);
-
-              emailSent = await sendClientEmail(
-                supabaseUrl,
-                supabaseServiceKey,
-                'eligibility-approved',
-                userEmail,
-                userName,
-                region
-              );
-              
-              // Log journey event
-              await logJourneyEvent(supabase, clientData.user_id, payload.clientId, 'client.approved', {
-                emailSent,
-                adminApproval: 'VERIFIED',
-              });
-              break;
-            }
-            case 'client.rejected': {
-              // Update database
-              await supabase
-                .from('drgreen_clients')
-                .update({ admin_approval: 'REJECTED' })
-                .eq('drgreen_client_id', payload.clientId);
-
-              emailSent = await sendClientEmail(
-                supabaseUrl,
-                supabaseServiceKey,
-                'eligibility-rejected',
-                userEmail,
-                userName,
-                region,
-                undefined,
-                payload.rejectionReason
-              );
-              
-              // Log journey event
-              await logJourneyEvent(supabase, clientData.user_id, payload.clientId, 'client.rejected', {
-                emailSent,
-                adminApproval: 'REJECTED',
-                rejectionReason: payload.rejectionReason,
-              });
-              break;
-            }
-            default:
-              console.log(`Unhandled client event: ${payload.event}`);
+            break;
           }
+          case 'kyc.verified':
+          case 'kyc.approved': {
+            // Update database
+            await supabase
+              .from('drgreen_clients')
+              .update({ is_kyc_verified: true })
+              .eq('drgreen_client_id', payload.clientId);
+
+            emailSent = await sendClientEmail(
+              supabaseUrl,
+              supabaseServiceKey,
+              'kyc-approved',
+              userEmail,
+              userName,
+              region
+            );
+            
+            // Log journey event
+            await logJourneyEvent(supabase, clientData.user_id, payload.clientId, payload.event, {
+              emailSent,
+              status: 'verified',
+            });
+            break;
+          }
+          case 'kyc.rejected':
+          case 'kyc.failed': {
+            emailSent = await sendClientEmail(
+              supabaseUrl,
+              supabaseServiceKey,
+              'kyc-rejected',
+              userEmail,
+              userName,
+              region,
+              payload.kycLink,
+              payload.rejectionReason
+            );
+            
+            // Log journey event
+            await logJourneyEvent(supabase, clientData.user_id, payload.clientId, payload.event, {
+              emailSent,
+              status: 'rejected',
+            });
+            break;
+          }
+          case 'client.approved': {
+            // Validate state transition
+            if (!isValidStateTransition(clientData.admin_approval, 'VERIFIED')) {
+              logWarn('Invalid state transition attempted', { 
+                current: clientData.admin_approval, 
+                new: 'VERIFIED' 
+              });
+            }
+            
+            // Update database
+            await supabase
+              .from('drgreen_clients')
+              .update({ admin_approval: 'VERIFIED' })
+              .eq('drgreen_client_id', payload.clientId);
+
+            emailSent = await sendClientEmail(
+              supabaseUrl,
+              supabaseServiceKey,
+              'eligibility-approved',
+              userEmail,
+              userName,
+              region
+            );
+            
+            // Log journey event
+            await logJourneyEvent(supabase, clientData.user_id, payload.clientId, 'client.approved', {
+              emailSent,
+              adminApproval: 'VERIFIED',
+              previousState: clientData.admin_approval,
+            });
+            break;
+          }
+          case 'client.rejected': {
+            // Validate state transition
+            if (!isValidStateTransition(clientData.admin_approval, 'REJECTED')) {
+              logWarn('Invalid state transition attempted', { 
+                current: clientData.admin_approval, 
+                new: 'REJECTED' 
+              });
+            }
+            
+            // Update database
+            await supabase
+              .from('drgreen_clients')
+              .update({ admin_approval: 'REJECTED' })
+              .eq('drgreen_client_id', payload.clientId);
+
+            emailSent = await sendClientEmail(
+              supabaseUrl,
+              supabaseServiceKey,
+              'eligibility-rejected',
+              userEmail,
+              userName,
+              region,
+              undefined,
+              payload.rejectionReason
+            );
+            
+            // Log journey event
+            await logJourneyEvent(supabase, clientData.user_id, payload.clientId, 'client.rejected', {
+              emailSent,
+              adminApproval: 'REJECTED',
+              previousState: clientData.admin_approval,
+            });
+            break;
+          }
+          default:
+            logInfo(`Unhandled client event: ${payload.event}`);
         }
       }
 
@@ -435,7 +596,7 @@ serve(async (req) => {
 
     // Handle inventory/stock update events
     if (payload.event.startsWith('inventory.') || payload.event.startsWith('stock.')) {
-      console.log(`Processing inventory event: ${payload.event}`);
+      logInfo(`Processing inventory event: ${payload.event}`);
       
       const stockUpdate = {
         strainId: payload.strainId,
@@ -455,7 +616,7 @@ serve(async (req) => {
         payload: stockUpdate,
       });
       
-      console.log(`[Realtime] Broadcasted stock update for strain ${payload.strainId}:`, stockUpdate);
+      logInfo(`Broadcasted stock update for strain`);
       
       return new Response(
         JSON.stringify({ success: true, event: payload.event, broadcasted: true }),
@@ -465,29 +626,35 @@ serve(async (req) => {
 
     // Handle order-related events
     if (payload.orderId) {
-      // Get user email and region for the order
-      let userEmail: string | null = null;
-      let region: string = 'global';
-
-      const { data: orderData } = await supabase
+      // Verify order exists
+      const { data: orderData, error: orderError } = await supabase
         .from('drgreen_orders')
         .select('user_id')
         .eq('drgreen_order_id', payload.orderId)
         .single();
 
-      if (orderData?.user_id) {
-        const { data: userData } = await supabase.auth.admin.getUserById(orderData.user_id);
-        userEmail = userData?.user?.email || null;
-
-        // Get region from client data
-        const { data: clientData } = await supabase
-          .from('drgreen_clients')
-          .select('country_code')
-          .eq('user_id', orderData.user_id)
-          .single();
-        
-        region = clientData?.country_code || 'global';
+      if (orderError || !orderData?.user_id) {
+        logWarn('Order not found for webhook');
+        return new Response(
+          JSON.stringify({ error: "Order not found" }),
+          { status: 404, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        );
       }
+
+      let userEmail: string | null = null;
+      let region: string = 'global';
+
+      const { data: userData } = await supabase.auth.admin.getUserById(orderData.user_id);
+      userEmail = userData?.user?.email || null;
+
+      // Get region from client data
+      const { data: clientData } = await supabase
+        .from('drgreen_clients')
+        .select('country_code')
+        .eq('user_id', orderData.user_id)
+        .single();
+      
+      region = clientData?.country_code || 'global';
 
       const domainConfig = getDomainConfig(region);
 
@@ -529,7 +696,7 @@ serve(async (req) => {
           break;
         }
         default:
-          console.log(`Unhandled webhook event: ${payload.event}`);
+          logInfo(`Unhandled webhook event: ${payload.event}`);
       }
 
       // Update order in database
@@ -540,9 +707,9 @@ serve(async (req) => {
           .eq('drgreen_order_id', payload.orderId);
 
         if (error) {
-          console.error('Error updating order:', error);
+          logError('Error updating order');
         } else {
-          console.log(`Order ${payload.orderId} updated:`, updates);
+          logInfo(`Order updated successfully`);
         }
       }
 
@@ -556,7 +723,7 @@ serve(async (req) => {
         );
         emailSent = await sendEmail(userEmail, emailContent.subject, emailContent.html, domainConfig);
         if (emailSent) {
-          console.log(`Email sent to ${userEmail} for order ${payload.orderId}`);
+          logInfo(`Email sent for order notification`);
         }
       }
     }
@@ -568,9 +735,9 @@ serve(async (req) => {
 
   } catch (error: unknown) {
     const message = error instanceof Error ? error.message : 'Unknown error';
-    console.error("Webhook error:", error);
+    logError("Webhook error", { message });
     return new Response(
-      JSON.stringify({ error: message }),
+      JSON.stringify({ error: "Internal server error" }),
       { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
   }

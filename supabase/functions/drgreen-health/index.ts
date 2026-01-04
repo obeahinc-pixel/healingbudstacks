@@ -8,6 +8,15 @@ const corsHeaders = {
 const DRGREEN_API_URL = "https://api.drgreennft.com/api/v1";
 const API_TIMEOUT_MS = 10000;
 
+// Minimal logging for health checks
+function logInfo(message: string) {
+  console.log(`[Health] ${message}`);
+}
+
+function logError(message: string) {
+  console.error(`[Health] ${message}`);
+}
+
 serve(async (req) => {
   if (req.method === 'OPTIONS') {
     return new Response(null, { headers: corsHeaders });
@@ -25,7 +34,7 @@ serve(async (req) => {
       status: apiKey && secretKey ? "ok" : "error",
       message: apiKey && secretKey 
         ? "API credentials configured" 
-        : "Missing API credentials (DRGREEN_API_KEY or DRGREEN_PRIVATE_KEY)",
+        : "Missing API credentials",
     };
 
     if (!apiKey || !secretKey) {
@@ -83,14 +92,13 @@ serve(async (req) => {
         const data = await response.json();
         checks.api_connectivity = {
           status: "ok",
-          message: `API reachable, returned ${Array.isArray(data) ? data.length : 'data'} strains`,
+          message: `API reachable`,
           duration: connectivityDuration,
         };
       } else {
-        const errorText = await response.text();
         checks.api_connectivity = {
           status: "warning",
-          message: `API returned ${response.status}: ${errorText.slice(0, 100)}`,
+          message: `API returned ${response.status}`,
           duration: connectivityDuration,
         };
       }
@@ -98,14 +106,17 @@ serve(async (req) => {
       const errorMessage = connError instanceof Error ? connError.message : "Unknown error";
       checks.api_connectivity = {
         status: "error",
-        message: `API unreachable: ${errorMessage}`,
+        message: `API unreachable`,
         duration: Date.now() - connectivityStart,
       };
+      logError(`API connectivity check failed: ${errorMessage}`);
     }
 
     // Determine overall health
     const allOk = Object.values(checks).every(c => c.status === "ok");
     const hasError = Object.values(checks).some(c => c.status === "error");
+
+    logInfo(`Health check completed: ${allOk ? 'healthy' : hasError ? 'unhealthy' : 'degraded'}`);
 
     return new Response(
       JSON.stringify({
@@ -121,12 +132,12 @@ serve(async (req) => {
     );
   } catch (error) {
     const errorMessage = error instanceof Error ? error.message : "Unknown error";
-    console.error("[Health Check] Error:", errorMessage);
+    logError(`Health check error: ${errorMessage}`);
     
     return new Response(
       JSON.stringify({
         status: "error",
-        message: errorMessage,
+        message: "Health check failed",
         timestamp: new Date().toISOString(),
       }),
       { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
