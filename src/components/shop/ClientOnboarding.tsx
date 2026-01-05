@@ -507,14 +507,23 @@ export function ClientOnboarding() {
 
       // Try to call edge function to create client (non-blocking)
       try {
-        console.log('[Registration] Calling drgreen-proxy with action: create-client-legacy');
+        console.log('[Registration] ========== CALLING DRGREEN-PROXY ==========');
+        console.log('[Registration] Action: create-client-legacy');
+        console.log('[Registration] Timestamp:', new Date().toISOString());
+        
         const { data: result, error } = await supabase.functions.invoke('drgreen-proxy', {
           body: {
             action: 'create-client-legacy',
             payload: legacyPayload,
           },
         });
-        console.log('[Registration] API response:', { result, error });
+        
+        console.log('[Registration] ========== EDGE FUNCTION RESPONSE ==========');
+        console.log('[Registration] Result:', JSON.stringify(result, null, 2));
+        console.log('[Registration] Error:', error ? JSON.stringify(error, null, 2) : 'none');
+        console.log('[Registration] Result type:', typeof result);
+        console.log('[Registration] Has clientId:', !!result?.clientId);
+        console.log('[Registration] Has kycLink:', !!result?.kycLink);
 
         // Handle 422 Unprocessable Entity (e.g., blurry ID)
         if (error) {

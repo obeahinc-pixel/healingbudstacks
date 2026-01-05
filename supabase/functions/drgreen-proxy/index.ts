@@ -355,8 +355,15 @@ async function drGreenRequest(
 }
 
 serve(async (req) => {
+  // ENTRY POINT LOGGING - Debug deployment and request routing
+  console.log("[drgreen-proxy] ========== REQUEST RECEIVED ==========");
+  console.log("[drgreen-proxy] Method:", req.method);
+  console.log("[drgreen-proxy] URL:", req.url);
+  console.log("[drgreen-proxy] Timestamp:", new Date().toISOString());
+  
   // Handle CORS preflight
   if (req.method === "OPTIONS") {
+    console.log("[drgreen-proxy] CORS preflight - returning 200");
     return new Response(null, { headers: corsHeaders });
   }
   
@@ -371,13 +378,41 @@ serve(async (req) => {
     if (req.method !== "GET" && req.method !== "HEAD") {
       try {
         body = await req.json();
+        console.log("[drgreen-proxy] Request body action:", body?.action);
       } catch {
         body = undefined;
+        console.log("[drgreen-proxy] No JSON body");
       }
     }
     
     // Route handling
     const action = body?.action || apiPath;
+    console.log("[drgreen-proxy] Resolved action:", action);
+    
+    // Health check endpoint - verify deployment and secrets
+    if (action === 'health-check') {
+      const hasApiKey = !!Deno.env.get("DRGREEN_API_KEY");
+      const hasPrivateKey = !!Deno.env.get("DRGREEN_PRIVATE_KEY");
+      const hasSupabaseUrl = !!Deno.env.get("SUPABASE_URL");
+      const hasAnonKey = !!Deno.env.get("SUPABASE_ANON_KEY");
+      
+      console.log("[drgreen-proxy] Health check:", { hasApiKey, hasPrivateKey, hasSupabaseUrl, hasAnonKey });
+      
+      return new Response(JSON.stringify({
+        status: 'ok',
+        timestamp: new Date().toISOString(),
+        secrets: {
+          DRGREEN_API_KEY: hasApiKey ? 'configured' : 'MISSING',
+          DRGREEN_PRIVATE_KEY: hasPrivateKey ? 'configured' : 'MISSING',
+          SUPABASE_URL: hasSupabaseUrl ? 'configured' : 'MISSING',
+          SUPABASE_ANON_KEY: hasAnonKey ? 'configured' : 'MISSING',
+        },
+        allSecretsConfigured: hasApiKey && hasPrivateKey && hasSupabaseUrl && hasAnonKey,
+      }), { 
+        status: 200, 
+        headers: { ...corsHeaders, "Content-Type": "application/json" } 
+      });
+    }
     
     logInfo(`Processing action: ${action}`, { method: req.method });
 
