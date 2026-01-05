@@ -75,7 +75,8 @@ const ADMIN_ACTIONS = [
   'dapp-clients', 'dapp-client-details', 'dapp-verify-client',
   'dapp-orders', 'dapp-order-details', 'dapp-update-order',
   'dapp-carts', 'dapp-nfts', 'dapp-strains', 'dapp-clients-list',
-  'update-order', 'update-client'
+  'update-order', 'update-client', 'delete-client', 'patch-client',
+  'activate-client', 'deactivate-client', 'bulk-delete-clients'
 ];
 
 // Actions that require ownership verification (user must own the resource)
@@ -97,7 +98,7 @@ const COUNTRY_GATED_ACTIONS = [
 const OPEN_COUNTRIES = ['ZAF', 'THA'];
 
 // Authenticated but no ownership check needed
-const AUTH_ONLY_ACTIONS: string[] = [];
+const AUTH_ONLY_ACTIONS: string[] = ['get-user-me'];
 
 /**
  * Input validation schemas
@@ -1365,6 +1366,64 @@ serve(async (req) => {
           throw new Error("Invalid payment ID format");
         }
         response = await drGreenRequest(`/dapp/payments/${body.paymentId}`, "GET");
+        break;
+      }
+      
+      // ==========================================
+      // NEW ENDPOINTS FROM POSTMAN COLLECTION
+      // ==========================================
+      
+      case "get-user-me": {
+        // GET /user/me - Get current authenticated user details
+        response = await drGreenRequestBody("/user/me", "GET", {});
+        break;
+      }
+      
+      case "delete-client": {
+        // DELETE /dapp/clients/:clientId - Delete a client
+        if (!validateClientId(body.clientId)) {
+          throw new Error("Invalid client ID format");
+        }
+        response = await drGreenRequest(`/dapp/clients/${body.clientId}`, "DELETE");
+        break;
+      }
+      
+      case "patch-client": {
+        // PATCH /dapp/clients/:clientId - Partial update client details
+        if (!validateClientId(body.clientId)) {
+          throw new Error("Invalid client ID format");
+        }
+        response = await drGreenRequest(`/dapp/clients/${body.clientId}`, "PATCH", body.data);
+        break;
+      }
+      
+      case "activate-client": {
+        // PATCH /dapp/clients/:clientId/activate - Activate a client
+        if (!validateClientId(body.clientId)) {
+          throw new Error("Invalid client ID format");
+        }
+        response = await drGreenRequest(`/dapp/clients/${body.clientId}/activate`, "PATCH", {});
+        break;
+      }
+      
+      case "deactivate-client": {
+        // PATCH /dapp/clients/:clientId/deactivate - Deactivate a client
+        if (!validateClientId(body.clientId)) {
+          throw new Error("Invalid client ID format");
+        }
+        response = await drGreenRequest(`/dapp/clients/${body.clientId}/deactivate`, "PATCH", {});
+        break;
+      }
+      
+      case "bulk-delete-clients": {
+        // Bulk delete clients - requires array of clientIds
+        if (!Array.isArray(body.clientIds) || body.clientIds.length === 0) {
+          throw new Error("Invalid clientIds - must be non-empty array");
+        }
+        if (body.clientIds.length > 50) {
+          throw new Error("Cannot delete more than 50 clients at once");
+        }
+        response = await drGreenRequest("/dapp/clients/bulk-delete", "POST", { clientIds: body.clientIds });
         break;
       }
       

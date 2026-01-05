@@ -290,6 +290,53 @@ export function useDrGreenApi() {
     }>('dapp-strains', params);
   };
 
+  // ==========================================
+  // NEW ENDPOINTS FROM POSTMAN COLLECTION
+  // ==========================================
+  
+  // Get current authenticated user details from Dr Green
+  const getUserMe = async () => {
+    return callProxy<{
+      id: string;
+      email: string;
+      firstName: string;
+      lastName: string;
+      walletAddress?: string;
+      nfts?: Array<{ id: string; tokenId: string; type: string }>;
+    }>('get-user-me');
+  };
+
+  // Delete a client (admin only)
+  const deleteClient = async (clientId: string) => {
+    return callProxy<{ success: boolean; message: string }>('delete-client', { clientId });
+  };
+
+  // Partial update client details (admin only)
+  const patchClient = async (clientId: string, data: {
+    firstName?: string;
+    lastName?: string;
+    email?: string;
+    phone?: string;
+    status?: string;
+  }) => {
+    return callProxy<{ success: boolean; client: object }>('patch-client', { clientId, data });
+  };
+
+  // Activate a client (admin only)
+  const activateClient = async (clientId: string) => {
+    return callProxy<{ success: boolean; message: string }>('activate-client', { clientId });
+  };
+
+  // Deactivate a client (admin only)
+  const deactivateClient = async (clientId: string) => {
+    return callProxy<{ success: boolean; message: string }>('deactivate-client', { clientId });
+  };
+
+  // Bulk delete clients (admin only, max 50)
+  const bulkDeleteClients = async (clientIds: string[]) => {
+    return callProxy<{ success: boolean; deleted: number; failed: number }>('bulk-delete-clients', { clientIds });
+  };
+
   return {
     // Existing methods
     createOrder,
@@ -311,5 +358,12 @@ export function useDrGreenApi() {
     getDappOrderDetails,
     updateDappOrder,
     getDappStrains,
+    // New endpoints from Postman collection
+    getUserMe,
+    deleteClient,
+    patchClient,
+    activateClient,
+    deactivateClient,
+    bulkDeleteClients,
   };
 }
