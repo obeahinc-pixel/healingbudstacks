@@ -145,7 +145,9 @@ CREATE TABLE public.drgreen_clients (
     admin_approval text DEFAULT 'PENDING'::text,
     kyc_link text,
     created_at timestamp with time zone DEFAULT now() NOT NULL,
-    updated_at timestamp with time zone DEFAULT now() NOT NULL
+    updated_at timestamp with time zone DEFAULT now() NOT NULL,
+    email text,
+    full_name text
 );
 
 
@@ -446,6 +448,13 @@ ALTER TABLE ONLY public.user_roles
 
 
 --
+-- Name: idx_drgreen_clients_email; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX idx_drgreen_clients_email ON public.drgreen_clients USING btree (email);
+
+
+--
 -- Name: idx_generated_product_images_product_id; Type: INDEX; Schema: public; Owner: -
 --
 
@@ -628,6 +637,20 @@ ALTER TABLE ONLY public.user_roles
 
 
 --
+-- Name: generated_product_images Admins can delete product images; Type: POLICY; Schema: public; Owner: -
+--
+
+CREATE POLICY "Admins can delete product images" ON public.generated_product_images FOR DELETE USING (public.has_role(auth.uid(), 'admin'::public.app_role));
+
+
+--
+-- Name: generated_product_images Admins can insert product images; Type: POLICY; Schema: public; Owner: -
+--
+
+CREATE POLICY "Admins can insert product images" ON public.generated_product_images FOR INSERT WITH CHECK (public.has_role(auth.uid(), 'admin'::public.app_role));
+
+
+--
 -- Name: user_roles Admins can manage roles; Type: POLICY; Schema: public; Owner: -
 --
 
@@ -656,10 +679,31 @@ CREATE POLICY "Admins can read all journey logs" ON public.kyc_journey_logs FOR 
 
 
 --
+-- Name: drgreen_clients Admins can update all drgreen clients; Type: POLICY; Schema: public; Owner: -
+--
+
+CREATE POLICY "Admins can update all drgreen clients" ON public.drgreen_clients FOR UPDATE USING (public.has_role(auth.uid(), 'admin'::public.app_role));
+
+
+--
 -- Name: prescription_documents Admins can update all prescription documents; Type: POLICY; Schema: public; Owner: -
 --
 
 CREATE POLICY "Admins can update all prescription documents" ON public.prescription_documents FOR UPDATE USING (public.has_role(auth.uid(), 'admin'::public.app_role));
+
+
+--
+-- Name: generated_product_images Admins can update product images; Type: POLICY; Schema: public; Owner: -
+--
+
+CREATE POLICY "Admins can update product images" ON public.generated_product_images FOR UPDATE USING (public.has_role(auth.uid(), 'admin'::public.app_role));
+
+
+--
+-- Name: drgreen_clients Admins can view all drgreen clients; Type: POLICY; Schema: public; Owner: -
+--
+
+CREATE POLICY "Admins can view all drgreen clients" ON public.drgreen_clients FOR SELECT USING (public.has_role(auth.uid(), 'admin'::public.app_role));
 
 
 --
@@ -705,6 +749,13 @@ CREATE POLICY "Users can delete from their own cart" ON public.drgreen_cart FOR 
 
 
 --
+-- Name: drgreen_clients Users can delete their own client record; Type: POLICY; Schema: public; Owner: -
+--
+
+CREATE POLICY "Users can delete their own client record" ON public.drgreen_clients FOR DELETE USING ((auth.uid() = user_id));
+
+
+--
 -- Name: dosage_logs Users can delete their own dosage logs; Type: POLICY; Schema: public; Owner: -
 --
 
@@ -712,10 +763,24 @@ CREATE POLICY "Users can delete their own dosage logs" ON public.dosage_logs FOR
 
 
 --
+-- Name: drgreen_orders Users can delete their own orders; Type: POLICY; Schema: public; Owner: -
+--
+
+CREATE POLICY "Users can delete their own orders" ON public.drgreen_orders FOR DELETE USING ((auth.uid() = user_id));
+
+
+--
 -- Name: prescription_documents Users can delete their own prescription documents; Type: POLICY; Schema: public; Owner: -
 --
 
 CREATE POLICY "Users can delete their own prescription documents" ON public.prescription_documents FOR DELETE USING ((auth.uid() = user_id));
+
+
+--
+-- Name: profiles Users can delete their own profile; Type: POLICY; Schema: public; Owner: -
+--
+
+CREATE POLICY "Users can delete their own profile" ON public.profiles FOR DELETE USING ((auth.uid() = id));
 
 
 --
