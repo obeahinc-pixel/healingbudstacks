@@ -952,6 +952,42 @@ serve(async (req) => {
           });
         } else {
           console.log("[create-client-legacy] SUCCESS: Client created successfully");
+          
+          // Parse and normalize the response for frontend consumption
+          // Dr. Green API may return: { client: { id, kycLink, ... } }
+          // Frontend expects: { clientId, kycLink, ... }
+          try {
+            const rawData = JSON.parse(respBody);
+            const normalizedResponse = {
+              success: true,
+              clientId: rawData.client?.id || rawData.clientId || rawData.id,
+              kycLink: rawData.client?.kycLink || rawData.kycLink || rawData.kyc_link,
+              isKYCVerified: rawData.client?.isKYCVerified || rawData.isKYCVerified || false,
+              adminApproval: rawData.client?.adminApproval || rawData.adminApproval || null,
+              // Spread the original data for any other fields
+              raw: rawData,
+            };
+            
+            console.log("[create-client-legacy] Normalized response:", {
+              clientId: normalizedResponse.clientId ? String(normalizedResponse.clientId).slice(0, 10) + '***' : 'MISSING',
+              hasKycLink: !!normalizedResponse.kycLink,
+              kycLinkPreview: normalizedResponse.kycLink ? normalizedResponse.kycLink.slice(0, 30) + '...' : 'NONE',
+            });
+            
+            logInfo("Client creation normalized response", {
+              hasClientId: !!normalizedResponse.clientId,
+              hasKycLink: !!normalizedResponse.kycLink,
+            });
+            
+            // Return normalized response directly
+            return new Response(JSON.stringify(normalizedResponse), {
+              status: 200,
+              headers: { ...corsHeaders, "Content-Type": "application/json" },
+            });
+          } catch (parseError) {
+            console.log("[create-client-legacy] Failed to parse/normalize response:", parseError);
+            // Fall through to default response handling
+          }
         }
         
         break;
