@@ -953,30 +953,92 @@ serve(async (req) => {
         } else {
           console.log("[create-client-legacy] SUCCESS: Client created successfully");
           
-          // Parse and normalize the response for frontend consumption
-          // Dr. Green API may return: { client: { id, kycLink, ... } }
-          // Frontend expects: { clientId, kycLink, ... }
+          // ========== DETAILED RESPONSE STRUCTURE LOGGING ==========
+          // This helps identify the exact field names for clientId and kycLink
           try {
             const rawData = JSON.parse(respBody);
+            
+            // Log the COMPLETE raw response structure
+            console.log("[create-client-legacy] ========== RAW RESPONSE STRUCTURE ==========");
+            console.log("[create-client-legacy] Raw response type:", typeof rawData);
+            console.log("[create-client-legacy] Raw response keys:", Object.keys(rawData));
+            console.log("[create-client-legacy] Full raw response (first 2000 chars):", JSON.stringify(rawData, null, 2).slice(0, 2000));
+            
+            // Check for 'client' nested object
+            if (rawData.client) {
+              console.log("[create-client-legacy] ========== NESTED 'client' OBJECT ==========");
+              console.log("[create-client-legacy] client object type:", typeof rawData.client);
+              console.log("[create-client-legacy] client object keys:", Object.keys(rawData.client));
+              console.log("[create-client-legacy] client.id:", rawData.client.id);
+              console.log("[create-client-legacy] client.kycLink:", rawData.client.kycLink);
+              console.log("[create-client-legacy] client.kyc_link:", rawData.client.kyc_link);
+              console.log("[create-client-legacy] client.isKYCVerified:", rawData.client.isKYCVerified);
+              console.log("[create-client-legacy] client.is_kyc_verified:", rawData.client.is_kyc_verified);
+              console.log("[create-client-legacy] client.adminApproval:", rawData.client.adminApproval);
+              console.log("[create-client-legacy] client.admin_approval:", rawData.client.admin_approval);
+              console.log("[create-client-legacy] Full client object:", JSON.stringify(rawData.client, null, 2).slice(0, 1500));
+            }
+            
+            // Check for 'data' nested object (alternative structure)
+            if (rawData.data) {
+              console.log("[create-client-legacy] ========== NESTED 'data' OBJECT ==========");
+              console.log("[create-client-legacy] data object type:", typeof rawData.data);
+              console.log("[create-client-legacy] data object keys:", Object.keys(rawData.data));
+              console.log("[create-client-legacy] Full data object:", JSON.stringify(rawData.data, null, 2).slice(0, 1500));
+            }
+            
+            // Check for top-level fields
+            console.log("[create-client-legacy] ========== TOP-LEVEL FIELDS ==========");
+            console.log("[create-client-legacy] rawData.id:", rawData.id);
+            console.log("[create-client-legacy] rawData.clientId:", rawData.clientId);
+            console.log("[create-client-legacy] rawData.client_id:", rawData.client_id);
+            console.log("[create-client-legacy] rawData.kycLink:", rawData.kycLink);
+            console.log("[create-client-legacy] rawData.kyc_link:", rawData.kyc_link);
+            console.log("[create-client-legacy] rawData.isKYCVerified:", rawData.isKYCVerified);
+            console.log("[create-client-legacy] rawData.is_kyc_verified:", rawData.is_kyc_verified);
+            console.log("[create-client-legacy] rawData.adminApproval:", rawData.adminApproval);
+            console.log("[create-client-legacy] rawData.admin_approval:", rawData.admin_approval);
+            console.log("[create-client-legacy] rawData.status:", rawData.status);
+            console.log("[create-client-legacy] rawData.success:", rawData.success);
+            console.log("[create-client-legacy] rawData.message:", rawData.message);
+            
+            // Check for any field containing 'kyc' or 'link' (case insensitive search)
+            console.log("[create-client-legacy] ========== KYC-RELATED FIELD SEARCH ==========");
+            const findKycFields = (obj: Record<string, unknown>, prefix = ''): void => {
+              for (const [key, value] of Object.entries(obj)) {
+                const fullKey = prefix ? `${prefix}.${key}` : key;
+                const lowerKey = key.toLowerCase();
+                if (lowerKey.includes('kyc') || lowerKey.includes('link') || lowerKey.includes('verification')) {
+                  console.log(`[create-client-legacy] Found KYC-related field: ${fullKey} =`, value);
+                }
+                if (value && typeof value === 'object' && !Array.isArray(value)) {
+                  findKycFields(value as Record<string, unknown>, fullKey);
+                }
+              }
+            };
+            findKycFields(rawData);
+            
+            // Parse and normalize the response for frontend consumption
+            // Try multiple possible paths for clientId and kycLink
             const normalizedResponse = {
               success: true,
-              clientId: rawData.client?.id || rawData.clientId || rawData.id,
-              kycLink: rawData.client?.kycLink || rawData.kycLink || rawData.kyc_link,
-              isKYCVerified: rawData.client?.isKYCVerified || rawData.isKYCVerified || false,
-              adminApproval: rawData.client?.adminApproval || rawData.adminApproval || null,
-              // Spread the original data for any other fields
+              clientId: rawData.client?.id || rawData.data?.id || rawData.clientId || rawData.client_id || rawData.id,
+              kycLink: rawData.client?.kycLink || rawData.client?.kyc_link || rawData.data?.kycLink || rawData.data?.kyc_link || rawData.kycLink || rawData.kyc_link,
+              isKYCVerified: rawData.client?.isKYCVerified || rawData.client?.is_kyc_verified || rawData.data?.isKYCVerified || rawData.isKYCVerified || rawData.is_kyc_verified || false,
+              adminApproval: rawData.client?.adminApproval || rawData.client?.admin_approval || rawData.data?.adminApproval || rawData.adminApproval || rawData.admin_approval || null,
               raw: rawData,
             };
             
-            console.log("[create-client-legacy] Normalized response:", {
-              clientId: normalizedResponse.clientId ? String(normalizedResponse.clientId).slice(0, 10) + '***' : 'MISSING',
-              hasKycLink: !!normalizedResponse.kycLink,
-              kycLinkPreview: normalizedResponse.kycLink ? normalizedResponse.kycLink.slice(0, 30) + '...' : 'NONE',
-            });
+            console.log("[create-client-legacy] ========== NORMALIZED RESPONSE ==========");
+            console.log("[create-client-legacy] Extracted clientId:", normalizedResponse.clientId || 'NOT FOUND');
+            console.log("[create-client-legacy] Extracted kycLink:", normalizedResponse.kycLink ? `${String(normalizedResponse.kycLink).slice(0, 50)}...` : 'NOT FOUND');
+            console.log("[create-client-legacy] Extracted isKYCVerified:", normalizedResponse.isKYCVerified);
+            console.log("[create-client-legacy] Extracted adminApproval:", normalizedResponse.adminApproval);
             
             logInfo("Client creation normalized response", {
               hasClientId: !!normalizedResponse.clientId,
               hasKycLink: !!normalizedResponse.kycLink,
+              clientIdSource: rawData.client?.id ? 'client.id' : rawData.data?.id ? 'data.id' : rawData.id ? 'id' : 'unknown',
             });
             
             // Return normalized response directly
@@ -985,7 +1047,9 @@ serve(async (req) => {
               headers: { ...corsHeaders, "Content-Type": "application/json" },
             });
           } catch (parseError) {
-            console.log("[create-client-legacy] Failed to parse/normalize response:", parseError);
+            console.log("[create-client-legacy] ========== PARSE ERROR ==========");
+            console.log("[create-client-legacy] Failed to parse response:", parseError);
+            console.log("[create-client-legacy] Raw response body:", respBody);
             // Fall through to default response handling
           }
         }
