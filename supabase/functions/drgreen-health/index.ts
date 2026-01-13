@@ -54,12 +54,27 @@ serve(async (req) => {
       // Build query string for signing
       const queryParams = "orderBy=desc&take=1&page=1";
       
-      // Sign the query string
+      // Decode secret key if it's Base64-encoded
       const encoder = new TextEncoder();
-      const keyData = encoder.encode(secretKey);
+      let keyBytes: Uint8Array;
+      const isBase64Key = /^[A-Za-z0-9+/]+=*$/.test(secretKey) && secretKey.length % 4 === 0;
+      if (isBase64Key) {
+        try {
+          const binaryString = atob(secretKey);
+          keyBytes = new Uint8Array(binaryString.length);
+          for (let i = 0; i < binaryString.length; i++) {
+            keyBytes[i] = binaryString.charCodeAt(i);
+          }
+        } catch {
+          keyBytes = encoder.encode(secretKey);
+        }
+      } else {
+        keyBytes = encoder.encode(secretKey);
+      }
+      
       const cryptoKey = await crypto.subtle.importKey(
         "raw",
-        keyData,
+        keyBytes.buffer as ArrayBuffer,
         { name: "HMAC", hash: "SHA-256" },
         false,
         ["sign"]

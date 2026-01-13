@@ -199,19 +199,58 @@ const DRGREEN_API_URL = "https://api.drgreennft.com/api/v1";
 const API_TIMEOUT_MS = 20000;
 
 /**
+ * Check if a string is valid Base64
+ */
+function isBase64(str: string): boolean {
+  if (!str || str.length % 4 !== 0) return false;
+  return /^[A-Za-z0-9+/]+=*$/.test(str);
+}
+
+/**
+ * Decode Base64 string to Uint8Array
+ */
+function base64ToBytes(base64: string): Uint8Array {
+  const binaryString = atob(base64);
+  const bytes = new Uint8Array(binaryString.length);
+  for (let i = 0; i < binaryString.length; i++) {
+    bytes[i] = binaryString.charCodeAt(i);
+  }
+  return bytes;
+}
+
+/**
  * Generate HMAC-SHA256 signature using Web Crypto API
  * @param data - The data to sign
- * @param secretKey - The secret key
+ * @param secretKey - The secret key (may be Base64-encoded)
+ * @param useDecodedKey - If true, Base64-decode the key before using
  * @returns Base64-encoded signature
  */
-async function generateHmacSignature(data: string, secretKey: string): Promise<string> {
+async function generateHmacSignature(
+  data: string, 
+  secretKey: string, 
+  useDecodedKey = false
+): Promise<string> {
   const encoder = new TextEncoder();
   
-  // Import the secret key for HMAC - use key directly as UTF-8 bytes
-  const keyData = encoder.encode(secretKey);
+  // Determine key bytes - either decode from Base64 or use raw UTF-8
+  let keyBytes: Uint8Array;
+  if (useDecodedKey && isBase64(secretKey)) {
+    try {
+      keyBytes = base64ToBytes(secretKey);
+      logDebug("Using Base64-decoded key bytes", { keyLength: keyBytes.length });
+    } catch {
+      // Fallback to raw bytes if decoding fails
+      keyBytes = encoder.encode(secretKey);
+      logDebug("Base64 decode failed, using raw key bytes");
+    }
+  } else {
+    keyBytes = encoder.encode(secretKey);
+    logDebug("Using raw key bytes", { keyLength: keyBytes.length });
+  }
+  
   const cryptoKey = await crypto.subtle.importKey(
     "raw",
-    keyData,
+    keyBytes.buffer as ArrayBuffer,
     { name: "HMAC", hash: "SHA-256" },
     false,
     ["sign"]
@@ -230,22 +269,23 @@ async function generateHmacSignature(data: string, secretKey: string): Promise<s
   return btoa(binary);
 }
 
+// Track which signing mode works - start with decoded (more likely correct)
+let USE_DECODED_KEY = true;
+
 /**
  * Sign payload using HMAC-SHA256 (matching WordPress legacy)
  * Uses native Web Crypto API
  * This is used for POST requests and singular GET requests (Method A)
  * 
- * IMPORTANT: Based on common API patterns and the Postman collection,
- * the signature should be computed on just the JSON body payload.
+ * IMPORTANT: Uses the current signing mode (decoded vs raw key bytes)
  */
 async function signPayload(payload: string, secretKey: string): Promise<string> {
-  const signature = await generateHmacSignature(payload, secretKey);
+  const signature = await generateHmacSignature(payload, secretKey, USE_DECODED_KEY);
   
-  // Debug logging
-  logInfo("Signature generated", {
-    signatureLength: signature.length,  // Should be 44 chars for Base64 SHA-256
-    signaturePreview: signature.slice(0, 3) + "***...",
-    payloadPreview: payload.slice(0, 3) + "***" + payload.slice(-3),
+  logDebug("Signature generated", {
+    signatureLength: signature.length,
+    useDecodedKey: USE_DECODED_KEY,
+    payloadLength: payload.length,
   });
   
   return signature;
@@ -256,7 +296,14 @@ async function signPayload(payload: string, secretKey: string): Promise<string> 
  * This is used for GET list endpoints (Method B)
  */
 async function signQueryString(queryString: string, secretKey: string): Promise<string> {
-  return signPayload(queryString, secretKey);
+  return generateHmacSignature(queryString, secretKey, USE_DECODED_KEY);
+}
+
+/**
+ * Generate signature with specific key mode (for diagnostics)
+ */
+async function signPayloadWithMode(payload: string, secretKey: string, useDecoded: boolean): Promise<string> {
+  return generateHmacSignature(payload, secretKey, useDecoded);
 }
 
 /**
@@ -578,35 +625,56 @@ serve(async (req) => {
       };
       
       if (apiKey && privateKey) {
-        // Test signature generation
+        // Test signature generation with both modes
         const testPayload = JSON.stringify({ test: "diagnostic" });
         const testQueryString = "orderBy=desc&take=1&page=1";
         
+        // Key analysis
+        const privateKeyIsBase64 = isBase64(privateKey);
+        let decodedKeyInfo = null;
+        if (privateKeyIsBase64) {
+          try {
+            const decoded = base64ToBytes(privateKey);
+            const decodedStr = new TextDecoder().decode(decoded);
+            decodedKeyInfo = {
+              decodedLength: decoded.length,
+              startsWithBegin: decodedStr.startsWith("-----BEGIN"),
+              preview: decodedStr.slice(0, 20) + "...",
+            };
+          } catch (e) {
+            decodedKeyInfo = { error: "Failed to decode" };
+          }
+        }
+        
+        diagnostics.keyAnalysis = {
+          privateKeyLength: privateKey.length,
+          privateKeyIsBase64,
+          decodedKeyInfo,
+          currentSigningMode: USE_DECODED_KEY ? "decoded" : "raw",
+        };
+        
         try {
-          const bodySignature = await signPayload(testPayload, privateKey);
-          const querySignature = await signQueryString(testQueryString, privateKey);
+          const rawSignature = await signPayloadWithMode(testPayload, privateKey, false);
+          const decodedSignature = await signPayloadWithMode(testPayload, privateKey, true);
           
           diagnostics.signatureTests = {
-            bodySignature: {
-              input: testPayload,
-              inputLength: testPayload.length,
-              outputLength: bodySignature.length,
-              outputPrefix: bodySignature.slice(0, 16) + '...',
-              valid: bodySignature.length === 44, // Base64 of 32-byte HMAC
+            rawKeySignature: {
+              outputLength: rawSignature.length,
+              outputPrefix: rawSignature.slice(0, 16) + '...',
+              valid: rawSignature.length === 44,
             },
-            querySignature: {
-              input: testQueryString,
-              inputLength: testQueryString.length,
-              outputLength: querySignature.length,
-              outputPrefix: querySignature.slice(0, 16) + '...',
-              valid: querySignature.length === 44,
+            decodedKeySignature: {
+              outputLength: decodedSignature.length,
+              outputPrefix: decodedSignature.slice(0, 16) + '...',
+              valid: decodedSignature.length === 44,
             },
+            signaturesMatch: rawSignature === decodedSignature,
           };
         } catch (e) {
           diagnostics.signatureTests = { error: e instanceof Error ? e.message : 'Unknown error' };
         }
         
-        // Test GET /strains (known working endpoint)
+        // Test GET /strains with current mode
         console.log("[API-DIAGNOSTICS] Testing GET /strains...");
         try {
           const strainsResp = await drGreenRequestQuery("/strains", { take: 1 }, true);
@@ -614,6 +682,7 @@ serve(async (req) => {
           (diagnostics.endpointTests as Record<string, unknown>[]).push({
             endpoint: "GET /strains",
             method: "Query String Signing",
+            signingMode: USE_DECODED_KEY ? "decoded" : "raw",
             status: strainsResp.status,
             success: strainsResp.ok,
             responsePreview: strainsBody.slice(0, 200),
@@ -627,65 +696,118 @@ serve(async (req) => {
           });
         }
         
-        // Test POST /dapp/clients with minimal payload
-        console.log("[API-DIAGNOSTICS] Testing POST /dapp/clients...");
+        // Test POST /dapp/clients with BOTH signing modes
+        console.log("[API-DIAGNOSTICS] Testing POST /dapp/clients with BOTH signing modes...");
+        const testClientPayload = {
+          transaction_metadata: { 
+            source: "Healingbuds_Diagnostic_Test",
+            timestamp: new Date().toISOString(),
+          },
+        };
+        
+        // Test with RAW key bytes
         try {
-          const testClientPayload = {
-            transaction_metadata: { 
-              source: "Healingbuds_Diagnostic_Test",
-              timestamp: new Date().toISOString(),
-            },
-          };
-          
-          const clientResp = await drGreenRequestBody("/dapp/clients", "POST", testClientPayload, true);
-          const clientBody = await clientResp.clone().text();
+          USE_DECODED_KEY = false;
+          const rawResp = await drGreenRequestBody("/dapp/clients", "POST", testClientPayload, true);
+          const rawBody = await rawResp.clone().text();
           (diagnostics.endpointTests as Record<string, unknown>[]).push({
-            endpoint: "POST /dapp/clients",
-            method: "Body Signing",
-            status: clientResp.status,
-            success: clientResp.ok,
-            responsePreview: clientBody.slice(0, 300),
-            diagnosis: clientResp.status === 401 
-              ? "PERMISSION_DENIED: API credentials may lack write access to /dapp/clients"
-              : clientResp.status === 422
-              ? "VALIDATION_ERROR: Payload structure may be incorrect"
-              : clientResp.ok
-              ? "SUCCESS: Endpoint is accessible"
-              : `UNKNOWN_ERROR: Status ${clientResp.status}`,
+            endpoint: "POST /dapp/clients (RAW key)",
+            method: "Body Signing - Raw Key Bytes",
+            signingMode: "raw",
+            status: rawResp.status,
+            success: rawResp.ok,
+            responsePreview: rawBody.slice(0, 300),
           });
         } catch (e) {
           (diagnostics.endpointTests as Record<string, unknown>[]).push({
-            endpoint: "POST /dapp/clients",
-            method: "Body Signing",
+            endpoint: "POST /dapp/clients (RAW key)",
+            method: "Body Signing - Raw Key Bytes",
             error: e instanceof Error ? e.message : 'Unknown error',
             success: false,
           });
         }
         
+        // Test with DECODED key bytes
+        try {
+          USE_DECODED_KEY = true;
+          const decodedResp = await drGreenRequestBody("/dapp/clients", "POST", testClientPayload, true);
+          const decodedBody = await decodedResp.clone().text();
+          (diagnostics.endpointTests as Record<string, unknown>[]).push({
+            endpoint: "POST /dapp/clients (DECODED key)",
+            method: "Body Signing - Decoded Key Bytes",
+            signingMode: "decoded",
+            status: decodedResp.status,
+            success: decodedResp.ok,
+            responsePreview: decodedBody.slice(0, 300),
+          });
+        } catch (e) {
+          (diagnostics.endpointTests as Record<string, unknown>[]).push({
+            endpoint: "POST /dapp/clients (DECODED key)",
+            method: "Body Signing - Decoded Key Bytes",
+            error: e instanceof Error ? e.message : 'Unknown error',
+            success: false,
+          });
+        }
+        
+        // Determine which mode works and set it
+        const rawTest = (diagnostics.endpointTests as Record<string, unknown>[]).find(
+          t => t.endpoint === "POST /dapp/clients (RAW key)"
+        );
+        const decodedTest = (diagnostics.endpointTests as Record<string, unknown>[]).find(
+          t => t.endpoint === "POST /dapp/clients (DECODED key)"
+        );
+        
+        // Choose the working mode
+        if (decodedTest?.success) {
+          USE_DECODED_KEY = true;
+          diagnostics.selectedMode = "decoded";
+        } else if (rawTest?.success) {
+          USE_DECODED_KEY = false;
+          diagnostics.selectedMode = "raw";
+        } else {
+          // Both failed - keep decoded as default
+          USE_DECODED_KEY = true;
+          diagnostics.selectedMode = "decoded (both failed)";
+        }
+        
         // Summary and recommendations
         const strainsTest = (diagnostics.endpointTests as Record<string, unknown>[]).find(t => t.endpoint === "GET /strains");
-        const clientsTest = (diagnostics.endpointTests as Record<string, unknown>[]).find(t => t.endpoint === "POST /dapp/clients");
         
         diagnostics.summary = {
           readEndpointsWork: strainsTest?.success === true,
-          writeEndpointsWork: clientsTest?.success === true,
-          likelyIssue: strainsTest?.success && !clientsTest?.success
-            ? "PERMISSION_MISMATCH: Credentials work for GET but not POST. Contact Dr. Green API administrator to verify write permissions."
-            : !strainsTest?.success && !clientsTest?.success
-            ? "CREDENTIALS_INVALID: Both read and write endpoints fail. Verify API key and private key."
-            : strainsTest?.success && clientsTest?.success
-            ? "ALL_WORKING: Both endpoints accessible."
-            : "UNKNOWN: Unexpected test results.",
+          writeWithRawKey: rawTest?.success === true,
+          writeWithDecodedKey: decodedTest?.success === true,
+          selectedSigningMode: diagnostics.selectedMode,
+          likelyIssue: 
+            decodedTest?.success 
+              ? "FIXED: Decoded key signing works! Client creation should now succeed."
+              : rawTest?.success 
+              ? "FIXED: Raw key signing works! Client creation should now succeed."
+              : rawTest?.status === 401 && decodedTest?.status === 401
+              ? "PERMISSION_DENIED: Both signing modes return 401. API credentials may lack write permissions."
+              : rawTest?.status === 422 || decodedTest?.status === 422
+              ? "PAYLOAD_VALIDATION: Got 422 - auth works but payload needs adjustment."
+              : "UNKNOWN_ERROR: Unexpected status codes.",
+          rawTestStatus: rawTest?.status,
+          decodedTestStatus: decodedTest?.status,
           recommendations: [] as string[],
         };
         
-        if (strainsTest?.success && !clientsTest?.success) {
-          (diagnostics.summary as Record<string, unknown>).recommendations = [
-            "Contact Dr. Green NFT API administrator",
-            "Verify your account has permission for POST /dapp/clients",
-            "Check if IP whitelisting is required",
-            "Confirm you are using the correct environment (sandbox vs production)",
-          ];
+        if (!rawTest?.success && !decodedTest?.success) {
+          if (rawTest?.status === 401 && decodedTest?.status === 401) {
+            (diagnostics.summary as Record<string, unknown>).recommendations = [
+              "Contact Dr. Green NFT API administrator",
+              "Verify your account has permission for POST /dapp/clients",
+              "Check if IP whitelisting is required",
+              "Confirm you are using the correct environment (sandbox vs production)",
+            ];
+          } else if (rawTest?.status === 422 || decodedTest?.status === 422) {
+            (diagnostics.summary as Record<string, unknown>).recommendations = [
+              "Auth is working! Payload validation failed.",
+              "Check the response body for specific field errors.",
+              "Update the payload structure to match API requirements.",
+            ];
+          }
         }
       } else {
         diagnostics.summary = {

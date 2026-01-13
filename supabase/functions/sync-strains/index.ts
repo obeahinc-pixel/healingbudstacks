@@ -10,16 +10,47 @@ const DRGREEN_API_URL = "https://api.drgreennft.com/api/v1";
 const S3_BASE = 'https://prod-profiles-backend.s3.amazonaws.com/';
 
 /**
+ * Check if a string is valid Base64
+ */
+function isBase64(str: string): boolean {
+  if (!str || str.length % 4 !== 0) return false;
+  return /^[A-Za-z0-9+/]+=*$/.test(str);
+}
+
+/**
+ * Decode Base64 string to Uint8Array
+ */
+function base64ToBytes(base64: string): Uint8Array {
+  const binaryString = atob(base64);
+  const bytes = new Uint8Array(binaryString.length);
+  for (let i = 0; i < binaryString.length; i++) {
+    bytes[i] = binaryString.charCodeAt(i);
+  }
+  return bytes;
+}
+
+/**
  * Sign query string using HMAC-SHA256 (matching drgreen-proxy)
+ * Uses decoded key bytes if the key is Base64-encoded
  */
 async function signQueryString(queryString: string, secretKey: string): Promise<string> {
   const encoder = new TextEncoder();
   
-  // Import the secret key for HMAC
-  const keyData = encoder.encode(secretKey);
+  // Use decoded key bytes if key is Base64-encoded
+  let keyBytes: Uint8Array;
+  if (isBase64(secretKey)) {
+    try {
+      keyBytes = base64ToBytes(secretKey);
+    } catch {
+      keyBytes = encoder.encode(secretKey);
+    }
+  } else {
+    keyBytes = encoder.encode(secretKey);
+  }
+  
   const cryptoKey = await crypto.subtle.importKey(
     "raw",
-    keyData,
+    keyBytes.buffer as ArrayBuffer,
     { name: "HMAC", hash: "SHA-256" },
     false,
     ["sign"]
