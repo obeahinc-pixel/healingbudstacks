@@ -8,7 +8,7 @@
  */
 
 import { Link, useNavigate, useLocation } from "react-router-dom";
-import { LogOut, LayoutDashboard, User, Shield } from "lucide-react";
+import { LogOut, LayoutDashboard, User, Shield, Beaker } from "lucide-react";
 import { useState, useEffect, useRef } from "react";
 import { cn } from "@/lib/utils";
 import { motion, useScroll, useSpring } from "framer-motion";
@@ -19,6 +19,7 @@ import { useTranslation } from "react-i18next";
 import { useTheme } from "next-themes";
 import { useTenant } from "@/hooks/useTenant";
 import { useUserRole } from "@/hooks/useUserRole";
+import { isMockModeEnabled } from "@/lib/mockMode";
 import EligibilityDialog from "@/components/EligibilityDialog";
 import LanguageSwitcher from "@/components/LanguageSwitcher";
 import ThemeToggle from "@/components/ThemeToggle";
@@ -37,6 +38,7 @@ const Header = ({ onMenuStateChange }: HeaderProps) => {
   const [scrolled, setScrolled] = useState(false);
   const [eligibilityDialogOpen, setEligibilityDialogOpen] = useState(false);
   const [user, setUser] = useState<SupabaseUser | null>(null);
+  const [mockMode, setMockMode] = useState(false);
   const navigate = useNavigate();
   const location = useLocation();
   const { toast } = useToast();
@@ -47,6 +49,24 @@ const Header = ({ onMenuStateChange }: HeaderProps) => {
   const headerRef = useRef<HTMLElement>(null);
   
   const isDark = resolvedTheme === 'dark';
+  
+  // Check mock mode status on mount and when localStorage changes
+  useEffect(() => {
+    const checkMockMode = () => setMockMode(isMockModeEnabled());
+    checkMockMode();
+    
+    // Listen for storage changes (from other tabs or console)
+    const handleStorage = () => checkMockMode();
+    window.addEventListener('storage', handleStorage);
+    
+    // Also check periodically (for same-tab console changes)
+    const interval = setInterval(checkMockMode, 1000);
+    
+    return () => {
+      window.removeEventListener('storage', handleStorage);
+      clearInterval(interval);
+    };
+  }, []);
   
   // Logo switches based on scroll: white when solid teal BG, teal when scrolled/faded
   const logoSrc = scrolled ? tenant.logo.light : tenant.logo.dark;
@@ -171,6 +191,24 @@ const Header = ({ onMenuStateChange }: HeaderProps) => {
                   )}
                 />
               </Link>
+              
+              {/* Mock Mode Indicator - Visible when test mode is active */}
+              {mockMode && (
+                <Link
+                  to="/debug"
+                  className={cn(
+                    "flex items-center gap-1.5 px-2.5 py-1 rounded-full",
+                    "bg-amber-500/20 border border-amber-500/50",
+                    "text-amber-300 text-xs font-medium",
+                    "hover:bg-amber-500/30 transition-colors",
+                    "animate-pulse"
+                  )}
+                  title="Mock Mode Active - Click to manage"
+                >
+                  <Beaker className="w-3.5 h-3.5" />
+                  <span className="hidden sm:inline">MOCK</span>
+                </Link>
+              )}
             
               {/* Center Navigation - Desktop */}
               <NavigationMenu scrolled={scrolled} isDark={isDark} />
