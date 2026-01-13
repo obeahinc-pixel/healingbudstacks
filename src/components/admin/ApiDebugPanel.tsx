@@ -42,6 +42,8 @@ interface EndpointConfig {
   category: "health" | "clients" | "orders" | "strains" | "admin";
   requiresParams: boolean;
   params?: Array<{ name: string; type: "text" | "select"; options?: string[]; required: boolean }>;
+  hasBody?: boolean;
+  defaultBody?: Record<string, unknown>;
 }
 
 const ENDPOINTS: EndpointConfig[] = [
@@ -88,6 +90,38 @@ const ENDPOINTS: EndpointConfig[] = [
     description: "Get current authenticated Dr Green user",
     category: "clients",
     requiresParams: false 
+  },
+  { 
+    id: "create-client-legacy", 
+    name: "Create Client (Legacy)", 
+    description: "Create a new client with legacy payload format - triggers First AML KYC",
+    category: "clients",
+    requiresParams: false,
+    hasBody: true,
+    defaultBody: {
+      firstName: "Test",
+      lastName: "User",
+      email: "test@healingbuds.com",
+      phoneCode: "+351",
+      phoneCountryCode: "PT",
+      contactNumber: "912345678",
+      shipping: {
+        address1: "Rua Test 123",
+        city: "Lisboa",
+        state: "",
+        country: "PT",
+        countryCode: "PRT",
+        postalCode: "1000-001"
+      },
+      medicalRecord: {
+        dob: "1990-05-15",
+        gender: "male",
+        medicalHistory0: true,
+        medicalHistory3: true,
+        medicalConditions: ["chronic_pain", "anxiety"],
+        medicinesTreatments: ["ibuprofen"]
+      }
+    }
   },
   { 
     id: "activate-client", 
@@ -192,25 +226,71 @@ const categoryColors: Record<string, string> = {
 export function ApiDebugPanel() {
   const [selectedEndpoint, setSelectedEndpoint] = useState<string>("health-check");
   const [params, setParams] = useState<Record<string, string>>({});
+  const [bodyJson, setBodyJson] = useState<string>("");
+  const [bodyError, setBodyError] = useState<string | null>(null);
   const [response, setResponse] = useState<ApiResponse>({ status: "idle" });
   const [history, setHistory] = useState<Array<{ endpoint: string; response: ApiResponse; timestamp: Date }>>([]);
   const { callProxy } = useDrGreenApi();
 
   const endpoint = ENDPOINTS.find(e => e.id === selectedEndpoint);
 
+  // Initialize body JSON when endpoint changes
+  React.useEffect(() => {
+    if (endpoint?.hasBody && endpoint.defaultBody) {
+      setBodyJson(JSON.stringify(endpoint.defaultBody, null, 2));
+      setBodyError(null);
+    } else {
+      setBodyJson("");
+      setBodyError(null);
+    }
+  }, [selectedEndpoint, endpoint]);
+
   const handleParamChange = (name: string, value: string) => {
     setParams(prev => ({ ...prev, [name]: value }));
+  };
+
+  const handleBodyChange = (value: string) => {
+    setBodyJson(value);
+    try {
+      JSON.parse(value);
+      setBodyError(null);
+    } catch (e) {
+      setBodyError("Invalid JSON");
+    }
   };
 
   const executeRequest = async () => {
     if (!endpoint) return;
 
+    // Validate body JSON if endpoint has body
+    if (endpoint.hasBody && bodyError) {
+      toast.error("Please fix the JSON body before executing");
+      return;
+    }
+
     setResponse({ status: "loading" });
     const startTime = performance.now();
 
     try {
+      // Build request body
+      const requestBody: Record<string, unknown> = { 
+        action: endpoint.id, 
+        ...params 
+      };
+
+      // Add payload for endpoints with body
+      if (endpoint.hasBody && bodyJson) {
+        try {
+          requestBody.payload = JSON.parse(bodyJson);
+        } catch {
+          toast.error("Invalid JSON body");
+          setResponse({ status: "idle" });
+          return;
+        }
+      }
+
       const { data, error } = await supabase.functions.invoke('drgreen-proxy', {
-        body: { action: endpoint.id, ...params },
+        body: requestBody,
       });
 
       const duration = Math.round(performance.now() - startTime);
@@ -341,6 +421,27 @@ export function ApiDebugPanel() {
                     </div>
                   ))}
                 </div>
+              </div>
+            )}
+
+            {/* Body Editor for POST endpoints */}
+            {endpoint?.hasBody && (
+              <div className="space-y-3 p-4 bg-muted/50 rounded-lg">
+                <div className="flex items-center justify-between">
+                  <Label className="text-sm font-medium">Request Body (JSON)</Label>
+                  {bodyError && (
+                    <Badge variant="destructive" className="text-xs">{bodyError}</Badge>
+                  )}
+                </div>
+                <Textarea
+                  value={bodyJson}
+                  onChange={(e) => handleBodyChange(e.target.value)}
+                  className="font-mono text-xs min-h-[200px] resize-y"
+                  placeholder="Enter JSON payload..."
+                />
+                <p className="text-xs text-muted-foreground">
+                  This payload mirrors the onboarding form structure. Modify to test different scenarios.
+                </p>
               </div>
             )}
 
