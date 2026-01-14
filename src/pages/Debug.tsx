@@ -550,7 +550,29 @@ export default function Debug() {
       
       const responseTime = Date.now() - startTime;
       
-      if (error) {
+      // Check for 401 authentication errors (expected when unauthenticated)
+      const errorIs401 = error?.message?.includes('401') || 
+                         error?.message?.includes('Unauthorized') ||
+                         error?.message?.includes('not authorized');
+      
+      const dataIs401 = data?.statusCode === 401 ||
+                        data?.error?.includes?.('not authorized') ||
+                        data?.error?.includes?.('Unauthorized') ||
+                        data?.message?.includes?.('not authorized') ||
+                        data?.message?.includes?.('Authentication required') ||
+                        data?.message?.includes?.('User is not authorized');
+      
+      const is401 = errorIs401 || dataIs401;
+      
+      if (is401) {
+        // 401 is expected when unauthenticated - API requires login
+        updateTest(6, {
+          status: 'pass',
+          details: `API reachable in ${responseTime}ms (authentication required)`,
+          expected: 'Dr. Green API reachable (401 expected when unauthenticated)',
+          actual: '401 Unauthorized - Login required for strains data',
+        });
+      } else if (error) {
         anyFailed = true;
         updateTest(6, {
           status: 'fail',
