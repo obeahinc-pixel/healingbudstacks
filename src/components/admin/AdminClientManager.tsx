@@ -85,12 +85,20 @@ export function AdminClientManager() {
           description: "Failed to fetch clients from Dr. Green API.",
           variant: "destructive",
         });
-      } else if (clientsResult.data?.clients) {
-        setClients(clientsResult.data.clients);
+      } else {
+        // Handle nested data structure from API: { success, statusCode, message, data: { clients: [...] } }
+        const responseData = clientsResult.data as unknown as { data?: { clients?: DrGreenClient[] } };
+        const clientsList = responseData?.data?.clients || (clientsResult.data as { clients?: DrGreenClient[] })?.clients;
+        if (clientsList) {
+          setClients(clientsList);
+        }
       }
 
-      if (summaryResult.data?.summary) {
-        setSummary(summaryResult.data.summary);
+      // Handle nested summary structure: { success, statusCode, message, data: { summary: {...} } }
+      const summaryData = summaryResult.data as unknown as { data?: { summary?: ClientsSummary } };
+      const summaryObj = summaryData?.data?.summary || (summaryResult.data as { summary?: ClientsSummary })?.summary;
+      if (summaryObj) {
+        setSummary(summaryObj);
       }
 
       if (showToast) {
