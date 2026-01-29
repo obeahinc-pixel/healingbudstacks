@@ -1872,7 +1872,12 @@ serve(async (req) => {
         const { clientId, verifyAction } = body || {};
         if (!clientId || !verifyAction) throw new Error("clientId and verifyAction are required");
         if (!validateClientId(clientId)) throw new Error("Invalid client ID format");
-        response = await drGreenRequest(`/dapp/clients/${clientId}/${verifyAction}`, "PATCH");
+        
+        // Map verifyAction to adminApproval status for the Dr. Green API
+        const adminApproval = verifyAction === 'verify' ? 'VERIFIED' : 'REJECTED';
+        
+        // Use PATCH to /dapp/clients/{clientId} with adminApproval in body
+        response = await drGreenRequest(`/dapp/clients/${clientId}`, "PATCH", { adminApproval });
         break;
       }
       
