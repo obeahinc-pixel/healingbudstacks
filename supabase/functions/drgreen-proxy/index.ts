@@ -203,9 +203,12 @@ function validateStringLength(value: unknown, maxLength: number): boolean {
  */
 async function verifyAuthentication(req: Request): Promise<{ user: any; supabaseClient: any } | null> {
   const authHeader = req.headers.get('authorization');
-  if (!authHeader) {
+  if (!authHeader || !authHeader.startsWith('Bearer ')) {
     return null;
   }
+
+  // Extract the token from the Bearer header
+  const token = authHeader.replace('Bearer ', '');
 
   const supabaseClient = createClient(
     Deno.env.get('SUPABASE_URL')!,
@@ -213,8 +216,10 @@ async function verifyAuthentication(req: Request): Promise<{ user: any; supabase
     { global: { headers: { Authorization: authHeader } } }
   );
 
-  const { data: { user }, error } = await supabaseClient.auth.getUser();
+  // CRITICAL: Must pass token explicitly when verify_jwt=false (Lovable Cloud uses ES256)
+  const { data: { user }, error } = await supabaseClient.auth.getUser(token);
   if (error || !user) {
+    logDebug('Auth verification failed', { error: error?.message });
     return null;
   }
 
