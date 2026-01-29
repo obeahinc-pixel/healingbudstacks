@@ -1,66 +1,114 @@
 
 
-# Fix Client Authorization Error in Admin Panel
+# Fix Client Approval - Use Correct Dr. Green API Endpoints
 
-## Problem Summary
+## Problem Confirmed
 
-When trying to approve/verify client "Kayliegh" in the Admin Client Manager, the system returns a 404 error:
+Testing revealed that while the current implementation no longer returns 404, it doesn't actually update the client's `adminApproval` status. The API returns HTTP 200 but the `adminApproval` field remains "PENDING".
 
+**API Response After PATCH:**
+```json
+{
+  "adminApproval": "PENDING",  // <-- Still PENDING, not VERIFIED
+  "isKYCVerified": true,
+  "updatedAt": "2026-01-29T20:55:54.415Z"  // <-- Timestamp updated
+}
 ```
-Cannot PATCH /api/v1/dapp/clients/47542db8-3982-4204-bd32-2f36617c5d3d/verify
-```
-
-The Dr. Green API does not have endpoints `/dapp/clients/{clientId}/verify` or `/dapp/clients/{clientId}/reject` - these endpoints don't exist.
 
 ---
 
 ## Root Cause
 
-The current implementation assumes the Dr. Green API has:
-- `PATCH /dapp/clients/{clientId}/verify` - Does NOT exist
-- `PATCH /dapp/clients/{clientId}/reject` - Does NOT exist
+The Dr. Green API does NOT accept `adminApproval` as a field in the PATCH `/dapp/clients/{id}` request body. The field is read-only on that endpoint.
 
-The API returns 404 because these endpoints were incorrectly assumed to exist.
+Looking at existing patterns in the codebase:
+- `PATCH /dapp/clients/{id}/activate` - Sets `isActive: true`
+- `PATCH /dapp/clients/{id}/deactivate` - Sets `isActive: false`
+
+The API likely follows the same sub-resource pattern for approval:
+- `PATCH /dapp/clients/{id}/approve` - Sets `adminApproval: "VERIFIED"`
+- `PATCH /dapp/clients/{id}/reject` - Sets `adminApproval: "REJECTED"`
 
 ---
 
 ## Solution
 
-Based on the API patterns observed in the codebase:
-1. The API has `activate` and `deactivate` endpoints
-2. Client approval likely works via a `PATCH /dapp/clients/{clientId}` with an `adminApproval` field in the body
+Update the `dapp-verify-client` case in the edge function to use the correct sub-resource endpoints.
 
-We need to:
-1. Update the edge function to use the correct API endpoint format
-2. Send `adminApproval: "VERIFIED"` or `adminApproval: "REJECTED"` as the request body
+**Current (Not Working):**
+```typescript
+// Sends adminApproval in body - API ignores it
+response = await drGreenRequest(
+  `/dapp/clients/${clientId}`, 
+  "PATCH", 
+  { adminApproval: "VERIFIED" }
+);
+```
+
+**Fixed:**
+```typescript
+// Use correct sub-resource endpoint pattern
+const endpoint = verifyAction === 'verify' 
+  ? `/dapp/clients/${clientId}/approve`
+  : `/dapp/clients/${clientId}/reject`;
+
+response = await drGreenRequest(endpoint, "PATCH", {});
+```
 
 ---
 
 ## Implementation Details
 
-### 1. Update Edge Function Handler
+### File to Modify
 
-Change the `dapp-verify-client` case in `supabase/functions/drgreen-proxy/index.ts`:
+`supabase/functions/drgreen-proxy/index.ts`
 
-```text
-Current (BROKEN):
-  PATCH /dapp/clients/{clientId}/verify   -> 404 Not Found
-  PATCH /dapp/clients/{clientId}/reject   -> 404 Not Found
+### Code Change (Lines 1871-1881)
 
-Proposed Fix:
-  PATCH /dapp/clients/{clientId}
-  Body: { "adminApproval": "VERIFIED" }   -> For approval
-  Body: { "adminApproval": "REJECTED" }   -> For rejection
+Replace:
+```typescript
+case "dapp-verify-client": {
+  const { clientId, verifyAction } = body || {};
+  if (!clientId || !verifyAction) throw new Error("clientId and verifyAction are required");
+  if (!validateClientId(clientId)) throw new Error("Invalid client ID format");
+  
+  // Map verifyAction to adminApproval status for the Dr. Green API
+  const adminApproval = verifyAction === 'verify' ? 'VERIFIED' : 'REJECTED';
+  
+  // Use PATCH to /dapp/clients/{clientId} with adminApproval in body
+  response = await drGreenRequest(`/dapp/clients/${clientId}`, "PATCH", { adminApproval });
+  break;
+}
 ```
 
-### 2. Map verifyAction to adminApproval Status
+With:
+```typescript
+case "dapp-verify-client": {
+  const { clientId, verifyAction } = body || {};
+  if (!clientId || !verifyAction) throw new Error("clientId and verifyAction are required");
+  if (!validateClientId(clientId)) throw new Error("Invalid client ID format");
+  
+  // Use sub-resource endpoints for approval/rejection
+  // Following the same pattern as activate/deactivate
+  const endpoint = verifyAction === 'verify' 
+    ? `/dapp/clients/${clientId}/approve`
+    : `/dapp/clients/${clientId}/reject`;
+  
+  response = await drGreenRequest(endpoint, "PATCH", {});
+  break;
+}
+```
 
-| verifyAction | adminApproval Value |
-|--------------|---------------------|
-| `"verify"`   | `"VERIFIED"`        |
-| `"reject"`   | `"REJECTED"`        |
+---
 
-### 3. Code Change
+## Alternative Endpoints to Try
+
+If `/approve` and `/reject` return 404, the API might use:
+- `/dapp/clients/{id}/verify` (already tried - returned 404)
+- `/dapp/clients/{id}/admin-approve`
+- `POST` instead of `PATCH`
+
+We can add fallback logic to try multiple endpoint patterns:
 
 ```typescript
 case "dapp-verify-client": {
@@ -68,53 +116,44 @@ case "dapp-verify-client": {
   if (!clientId || !verifyAction) throw new Error("clientId and verifyAction are required");
   if (!validateClientId(clientId)) throw new Error("Invalid client ID format");
   
-  // Map action to adminApproval status
-  const adminApproval = verifyAction === 'verify' ? 'VERIFIED' : 'REJECTED';
+  // Try /approve and /reject first (most likely pattern)
+  const primaryEndpoint = verifyAction === 'verify' 
+    ? `/dapp/clients/${clientId}/approve`
+    : `/dapp/clients/${clientId}/reject`;
   
-  // Use PATCH to /dapp/clients/{clientId} with adminApproval in body
-  response = await drGreenRequest(
-    `/dapp/clients/${clientId}`, 
-    "PATCH", 
-    { adminApproval }
-  );
+  response = await drGreenRequest(primaryEndpoint, "PATCH", {});
+  
+  // If 404, try alternative endpoints
+  if (response.statusCode === 404) {
+    logInfo("Primary endpoint not found, trying alternative", { endpoint: primaryEndpoint });
+    
+    // Try POST instead of PATCH
+    response = await drGreenRequest(primaryEndpoint, "POST", {});
+  }
+  
   break;
 }
 ```
 
 ---
 
-## Alternative: Use Activate/Deactivate Endpoints
-
-If the `adminApproval` field approach doesn't work, the API might expect:
-
-- `PATCH /dapp/clients/{clientId}/activate` for approval
-- `PATCH /dapp/clients/{clientId}/deactivate` for rejection
-
-This would require testing to confirm which pattern the Dr. Green API uses.
-
----
-
-## Files to Modify
-
-| File | Changes |
-|------|---------|
-| `supabase/functions/drgreen-proxy/index.ts` | Update `dapp-verify-client` case to use correct API endpoint and body format |
-
----
-
 ## Testing After Fix
 
-1. Navigate to `/admin` -> Dashboard tab
-2. Click on a client with "Pending" status (like Kayliegh)
-3. Click "Approve" button
-4. Verify the API call succeeds and client status changes to "VERIFIED"
-5. Test the "Reject" functionality on another pending client
+1. Deploy the updated edge function
+2. Navigate to `/admin` Dashboard tab
+3. Click "Approve" on Kayliegh Moutinho
+4. Verify the API returns success
+5. Check that:
+   - Kayliegh moves from "Pending" (6) to "Verified" (1)
+   - The summary counts update correctly
+6. Test the "Reject" functionality on another pending client
 
 ---
 
 ## Technical Notes
 
-- The edge function will need to be redeployed after the change
-- The frontend code (`useDrGreenApi.ts` and `AdminClientManager.tsx`) already correctly sends `verifyAction: 'verify'` or `verifyAction: 'reject'`
-- No frontend changes are needed - only the edge function needs to map this to the correct API format
+- The edge function must be redeployed after changes
+- No frontend changes required
+- If `/approve` returns 404, we'll need to check Dr. Green API documentation for the correct endpoint
+- Consider contacting Dr. Green API support if endpoint discovery fails
 
