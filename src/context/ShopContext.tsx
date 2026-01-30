@@ -153,6 +153,58 @@ export function ShopProvider({ children }: { children: React.ReactNode }) {
     setCart(data || []);
   }, []);
 
+  // Attempt to auto-discover and link existing Dr. Green client by email
+  const linkClientFromDrGreenByAuthEmail = useCallback(async (userId: string): Promise<boolean> => {
+    try {
+      console.log('[ShopContext] Attempting auto-discovery of Dr. Green client...');
+      
+      const { data, error } = await supabase.functions.invoke('drgreen-proxy', {
+        body: { action: 'get-client-by-auth-email' },
+      });
+      
+      if (error) {
+        console.error('[ShopContext] Auto-discovery API error:', error);
+        return false;
+      }
+      
+      if (data?.found && data?.clientId) {
+        console.log('[ShopContext] Found existing Dr. Green client, linking...');
+        
+        // Upsert the local mapping
+        const { error: upsertError } = await supabase
+          .from('drgreen_clients')
+          .upsert({
+            user_id: userId,
+            drgreen_client_id: data.clientId,
+            is_kyc_verified: data.isKYCVerified ?? false,
+            admin_approval: data.adminApproval || 'PENDING',
+            kyc_link: data.kycLink || null,
+            email: data.email || null,
+            full_name: data.firstName && data.lastName 
+              ? `${data.firstName} ${data.lastName}`.trim() 
+              : null,
+            country_code: data.countryCode || 'PT',
+          }, {
+            onConflict: 'user_id',
+          });
+        
+        if (upsertError) {
+          console.error('[ShopContext] Failed to upsert client mapping:', upsertError);
+          return false;
+        }
+        
+        console.log('[ShopContext] Successfully linked Dr. Green client:', data.clientId);
+        return true;
+      } else {
+        console.log('[ShopContext] No existing Dr. Green client found for this email');
+        return false;
+      }
+    } catch (err) {
+      console.error('[ShopContext] Auto-discovery error:', err);
+      return false;
+    }
+  }, []);
+
   const fetchClient = useCallback(async () => {
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) {
@@ -171,11 +223,30 @@ export function ShopProvider({ children }: { children: React.ReactNode }) {
       console.error('Error fetching client:', error);
     }
 
+    // If no local client record exists, try to auto-discover from Dr. Green API
+    if (!data) {
+      console.log('[ShopContext] No local client record, attempting auto-discovery...');
+      const linked = await linkClientFromDrGreenByAuthEmail(user.id);
+      
+      if (linked) {
+        // Refetch after linking
+        const { data: newData } = await supabase
+          .from('drgreen_clients')
+          .select('*')
+          .eq('user_id', user.id)
+          .maybeSingle();
+        
+        setDrGreenClient(newData);
+        setIsLoading(false);
+        return;
+      }
+    }
+
     setDrGreenClient(data);
     // NOTE: Country is determined by URL domain, NOT client record
     // Client's stored country_code is for their registration, not for browsing
     setIsLoading(false);
-  }, []);
+  }, [linkClientFromDrGreenByAuthEmail]);
 
   const refreshClient = useCallback(async () => {
     await fetchClient();

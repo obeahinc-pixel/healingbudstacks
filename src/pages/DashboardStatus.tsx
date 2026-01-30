@@ -47,9 +47,13 @@ export default function DashboardStatus() {
     }
   }, [syncVerificationFromDrGreen, toast]);
 
-  // Auto-sync for pending verifications every 30 seconds
+  // Auto-sync on mount and then every 30 seconds for pending verifications
   useEffect(() => {
     if (!isLoading && drGreenClient && !drGreenClient.is_kyc_verified) {
+      // Immediate sync on mount
+      syncVerificationFromDrGreen();
+      
+      // Then poll every 30 seconds
       const interval = setInterval(() => {
         syncVerificationFromDrGreen();
       }, 30000);
