@@ -37,11 +37,15 @@ import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
 import { useToast } from "@/hooks/use-toast";
 import { useDrGreenApi } from "@/hooks/useDrGreenApi";
+import { useDrGreenClientSync } from "@/hooks/useDrGreenClientSync";
 import { BatchImageGenerator } from "@/components/admin/BatchImageGenerator";
 import { KYCJourneyViewer } from "@/components/admin/KYCJourneyViewer";
 import { AdminEmailTrigger } from "@/components/admin/AdminEmailTrigger";
+import { AdminClientImport } from "@/components/admin/AdminClientImport";
+import { AdminClientManager } from "@/components/admin/AdminClientManager";
 import { ApiDebugPanel } from "@/components/admin/ApiDebugPanel";
 import { ApiTestRunner } from "@/components/admin/ApiTestRunner";
+import { ApiComparisonDashboard } from "@/components/admin/ApiComparisonDashboard";
 import { useAccount, useDisconnect, useBalance, useChainId } from "wagmi";
 import { useDrGreenKeyOwnership } from "@/hooks/useNFTOwnership";
 import { useWallet } from "@/context/WalletContext";
@@ -74,7 +78,8 @@ interface AdminUser {
 const AdminDashboard = () => {
   const navigate = useNavigate();
   const { toast } = useToast();
-  const { getDashboardSummary, getSalesSummary } = useDrGreenApi();
+  const { getDashboardSummary, getSalesSummary, getClientsSummary, getDappClients } = useDrGreenApi();
+  const { fetchSummary: fetchClientSummary, syncClientsToSupabase, syncing: syncingClients } = useDrGreenClientSync();
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [stats, setStats] = useState<DashboardStats | null>(null);
@@ -168,20 +173,39 @@ const AdminDashboard = () => {
       const totalClients = clients?.length || 0;
       const verifiedClients = clients?.filter(c => c.is_kyc_verified && c.admin_approval === 'VERIFIED').length || 0;
 
-      // Fetch LIVE stats from Dr Green Dapp API
+      // Fetch LIVE stats from Dr Green Dapp API using working endpoints
       let dappTotalClients = 0;
       let dappTotalOrders = 0;
       let dappTotalSales = 0;
       let dappPendingClients = 0;
+      let dappVerifiedClients = 0;
 
       try {
+        // Use get-clients-summary (working endpoint) for client stats
+        const { data: clientSummary, error: clientError } = await getClientsSummary();
+        if (!clientError && clientSummary?.summary) {
+          dappTotalClients = clientSummary.summary.totalCount || 0;
+          dappPendingClients = clientSummary.summary.PENDING || 0;
+          dappVerifiedClients = clientSummary.summary.VERIFIED || 0;
+        }
+
+        // Fallback to dapp-clients if summary fails
+        if (!clientSummary?.summary) {
+          const { data: clientsData, error: clientsError } = await getDappClients({ take: 100 });
+          if (!clientsError && clientsData?.clients) {
+            dappTotalClients = clientsData.total || clientsData.clients.length;
+            dappPendingClients = clientsData.clients.filter((c: any) => c.adminApproval === 'PENDING').length;
+            dappVerifiedClients = clientsData.clients.filter((c: any) => c.adminApproval === 'VERIFIED' && c.isKYCVerified).length;
+          }
+        }
+
+        // Try dashboard-summary (may still 401 due to API permissions)
         const { data: dappSummary, error: dappError } = await getDashboardSummary();
         if (!dappError && dappSummary) {
-          dappTotalClients = dappSummary.totalClients || 0;
           dappTotalOrders = dappSummary.totalOrders || 0;
-          dappPendingClients = dappSummary.pendingClients || 0;
         }
         
+        // Try sales-summary for total sales
         const { data: salesSummary, error: salesError } = await getSalesSummary();
         if (!salesError && salesSummary) {
           dappTotalSales = salesSummary.totalSales || 0;
@@ -636,6 +660,11 @@ const AdminDashboard = () => {
           ))}
         </div>
 
+        {/* Client Management */}
+        <div className="mb-12">
+          <AdminClientManager />
+        </div>
+
         {/* AI Image Generator */}
         <div className="mb-12">
           <BatchImageGenerator />
@@ -651,9 +680,19 @@ const AdminDashboard = () => {
           <AdminEmailTrigger />
         </div>
 
+        {/* Client Import Tool */}
+        <div className="mb-12">
+          <AdminClientImport />
+        </div>
+
         {/* API Test Runner */}
         <div className="mb-12">
           <ApiTestRunner />
+        </div>
+
+        {/* API Comparison Dashboard */}
+        <div className="mb-12">
+          <ApiComparisonDashboard />
         </div>
 
         {/* API Debug Panel */}

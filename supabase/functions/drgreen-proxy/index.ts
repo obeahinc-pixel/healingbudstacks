@@ -203,9 +203,12 @@ function validateStringLength(value: unknown, maxLength: number): boolean {
  */
 async function verifyAuthentication(req: Request): Promise<{ user: any; supabaseClient: any } | null> {
   const authHeader = req.headers.get('authorization');
-  if (!authHeader) {
+  if (!authHeader || !authHeader.startsWith('Bearer ')) {
     return null;
   }
+
+  // Extract the token from the Bearer header
+  const token = authHeader.replace('Bearer ', '');
 
   const supabaseClient = createClient(
     Deno.env.get('SUPABASE_URL')!,
@@ -213,8 +216,10 @@ async function verifyAuthentication(req: Request): Promise<{ user: any; supabase
     { global: { headers: { Authorization: authHeader } } }
   );
 
-  const { data: { user }, error } = await supabaseClient.auth.getUser();
+  // CRITICAL: Must pass token explicitly when verify_jwt=false (Lovable Cloud uses ES256)
+  const { data: { user }, error } = await supabaseClient.auth.getUser(token);
   if (error || !user) {
+    logDebug('Auth verification failed', { error: error?.message });
     return null;
   }
 
@@ -1807,22 +1812,27 @@ serve(async (req) => {
       // ==========================================
       
       case "dashboard-summary": {
-        response = await drGreenRequest("/dapp/dashboard/summary", "GET");
+        // Use query string signing for GET endpoint (fixes 401)
+        response = await drGreenRequestQuery("/dapp/dashboard/summary", {});
         break;
       }
       
       case "dashboard-analytics": {
         const { startDate, endDate, filterBy, orderBy } = body || {};
-        let queryParams = `?orderBy=${orderBy || 'asc'}`;
-        if (startDate) queryParams += `&startDate=${startDate}`;
-        if (endDate) queryParams += `&endDate=${endDate}`;
-        if (filterBy) queryParams += `&filterBy=${filterBy}`;
-        response = await drGreenRequest(`/dapp/dashboard/analytics${queryParams}`, "GET");
+        const queryParams: Record<string, string | number> = {
+          orderBy: orderBy || 'asc',
+        };
+        if (startDate) queryParams.startDate = startDate;
+        if (endDate) queryParams.endDate = endDate;
+        if (filterBy) queryParams.filterBy = filterBy;
+        // Use query string signing for GET with params (fixes 401)
+        response = await drGreenRequestQuery("/dapp/dashboard/analytics", queryParams);
         break;
       }
       
       case "sales-summary": {
-        response = await drGreenRequest("/dapp/sales/summary", "GET");
+        // Use query string signing for GET endpoint (fixes 401)
+        response = await drGreenRequestQuery("/dapp/sales/summary", {});
         break;
       }
       
@@ -1833,13 +1843,20 @@ serve(async (req) => {
           throw new Error("Invalid pagination parameters");
         }
         
-        let queryParams = `?orderBy=${orderBy || 'desc'}&take=${take || 10}&page=${page || 1}`;
-        if (search) queryParams += `&search=${encodeURIComponent(String(search).slice(0, 100))}`;
-        if (searchBy) queryParams += `&searchBy=${searchBy}`;
-        if (status) queryParams += `&status=${status}`;
-        if (kyc) queryParams += `&kyc=${kyc}`;
-        if (adminApproval) queryParams += `&adminApproval=${adminApproval}`;
-        response = await drGreenRequest(`/dapp/clients${queryParams}`, "GET");
+        // Build query params object for proper signing
+        const queryParams: Record<string, string | number> = {
+          orderBy: orderBy || 'desc',
+          take: take || 10,
+          page: page || 1,
+        };
+        if (search) queryParams.search = String(search).slice(0, 100);
+        if (searchBy) queryParams.searchBy = searchBy;
+        if (status) queryParams.status = status;
+        if (kyc !== undefined) queryParams.kyc = String(kyc);
+        if (adminApproval) queryParams.adminApproval = adminApproval;
+        
+        // Use query string signing for GET with params (fixes 401)
+        response = await drGreenRequestQuery("/dapp/clients", queryParams);
         break;
       }
       
@@ -1852,10 +1869,25 @@ serve(async (req) => {
       }
       
       case "dapp-verify-client": {
-        const { clientId, action: verifyAction } = body || {};
-        if (!clientId || !verifyAction) throw new Error("clientId and action are required");
+        // DEPRECATED: The Dr. Green API does NOT support external approval/rejection.
+        // The only documented PATCH endpoints are /activate and /deactivate (for isActive status).
+        // Client adminApproval can ONLY be changed within the Dr. Green DApp admin panel.
+        // Webhooks (client.approved, client.rejected) notify us when status changes.
+        throw new Error(
+          "Client approval/rejection is not supported via API. " +
+          "Please approve clients directly in the Dr. Green DApp admin portal. " +
+          "Use the 'Sync Status' feature to refresh local data."
+        );
+      }
+      
+      // Sync client status - fetches live data from Dr. Green API
+      case "sync-client-status": {
+        const { clientId } = body || {};
+        if (!clientId) throw new Error("clientId is required");
         if (!validateClientId(clientId)) throw new Error("Invalid client ID format");
-        response = await drGreenRequest(`/dapp/clients/${clientId}/${verifyAction}`, "PATCH");
+        
+        // GET /dapp/clients/{clientId} returns current adminApproval status
+        response = await drGreenRequest(`/dapp/clients/${clientId}`, "GET");
         break;
       }
       
@@ -1866,12 +1898,19 @@ serve(async (req) => {
           throw new Error("Invalid pagination parameters");
         }
         
-        let queryParams = `?orderBy=${orderBy || 'desc'}&take=${take || 10}&page=${page || 1}`;
-        if (search) queryParams += `&search=${encodeURIComponent(String(search).slice(0, 100))}`;
-        if (searchBy) queryParams += `&searchBy=${searchBy}`;
-        if (adminApproval) queryParams += `&adminApproval=${adminApproval}`;
-        if (clientIds) queryParams += `&clientIds=${JSON.stringify(clientIds)}`;
-        response = await drGreenRequest(`/dapp/orders${queryParams}`, "GET");
+        // Build query params object for proper signing
+        const queryParams: Record<string, string | number> = {
+          orderBy: orderBy || 'desc',
+          take: take || 10,
+          page: page || 1,
+        };
+        if (search) queryParams.search = String(search).slice(0, 100);
+        if (searchBy) queryParams.searchBy = searchBy;
+        if (adminApproval) queryParams.adminApproval = adminApproval;
+        if (clientIds) queryParams.clientIds = JSON.stringify(clientIds);
+        
+        // Use query string signing for GET with params (fixes 401)
+        response = await drGreenRequestQuery("/dapp/orders", queryParams);
         break;
       }
       
@@ -1898,15 +1937,23 @@ serve(async (req) => {
           throw new Error("Invalid pagination parameters");
         }
         
-        let queryParams = `?orderBy=${orderBy || 'desc'}&take=${take || 10}&page=${page || 1}`;
-        if (search) queryParams += `&search=${encodeURIComponent(String(search).slice(0, 100))}`;
-        if (searchBy) queryParams += `&searchBy=${searchBy}`;
-        response = await drGreenRequest(`/dapp/carts${queryParams}`, "GET");
+        // Build query params object for proper signing
+        const queryParams: Record<string, string | number> = {
+          orderBy: orderBy || 'desc',
+          take: take || 10,
+          page: page || 1,
+        };
+        if (search) queryParams.search = String(search).slice(0, 100);
+        if (searchBy) queryParams.searchBy = searchBy;
+        
+        // Use query string signing for GET with params (fixes 401)
+        response = await drGreenRequestQuery("/dapp/carts", queryParams);
         break;
       }
       
       case "dapp-nfts": {
-        response = await drGreenRequest("/dapp/users/nfts", "GET");
+        // Use query string signing for GET endpoint (fixes 401)
+        response = await drGreenRequestQuery("/dapp/users/nfts", {});
         break;
       }
       
@@ -1917,20 +1964,31 @@ serve(async (req) => {
           throw new Error("Invalid country code");
         }
         
-        let queryParams = `?orderBy=${orderBy || 'desc'}`;
-        if (countryCode) queryParams += `&countryCode=${countryCode}`;
-        if (search) queryParams += `&search=${encodeURIComponent(String(search).slice(0, 100))}`;
-        if (searchBy) queryParams += `&searchBy=${searchBy}`;
-        response = await drGreenRequest(`/dapp/strains${queryParams}`, "GET");
+        // Build query params object for proper signing
+        const queryParams: Record<string, string | number> = {
+          orderBy: orderBy || 'desc',
+        };
+        if (countryCode) queryParams.countryCode = countryCode;
+        if (search) queryParams.search = String(search).slice(0, 100);
+        if (searchBy) queryParams.searchBy = searchBy;
+        
+        // Use query string signing for GET with params (fixes 401)
+        response = await drGreenRequestQuery("/dapp/strains", queryParams);
         break;
       }
       
       case "dapp-clients-list": {
         const { orderBy, status, kyc } = body || {};
-        let queryParams = `?orderBy=${orderBy || 'desc'}`;
-        if (status) queryParams += `&status=${status}`;
-        if (kyc) queryParams += `&kyc=${kyc}`;
-        response = await drGreenRequest(`/dapp/clients/list${queryParams}`, "GET");
+        
+        // Build query params object for proper signing
+        const queryParams: Record<string, string | number> = {
+          orderBy: orderBy || 'desc',
+        };
+        if (status) queryParams.status = status;
+        if (kyc !== undefined) queryParams.kyc = String(kyc);
+        
+        // Use query string signing for GET with params (fixes 401)
+        response = await drGreenRequestQuery("/dapp/clients/list", queryParams);
         break;
       }
       
@@ -2196,6 +2254,208 @@ serve(async (req) => {
         break;
       }
       
+      // ==========================================
+      // NEW ENDPOINTS FROM OFFICIAL DOCUMENTATION
+      // ==========================================
+      
+      case "get-clients-summary": {
+        // GET /dapp/clients/summary - Get client summary stats
+        response = await drGreenRequestBody("/dapp/clients/summary", "GET", {});
+        break;
+      }
+      
+      case "get-sales": {
+        // GET /dapp/sales - Get sales data with filtering
+        const { page, take, orderBy, search, searchBy, stage } = body || {};
+        
+        if (!validatePagination(page, take)) {
+          throw new Error("Invalid pagination parameters");
+        }
+        
+        const queryParams: Record<string, string | number> = {
+          orderBy: orderBy || 'desc',
+          take: take || 10,
+          page: page || 1,
+        };
+        if (search) queryParams.search = String(search).slice(0, 100);
+        if (searchBy) queryParams.searchBy = searchBy;
+        if (stage && ['LEADS', 'ONGOING', 'CLOSED'].includes(stage)) {
+          queryParams.stage = stage;
+        }
+        
+        response = await drGreenRequestQuery("/dapp/sales", queryParams);
+        break;
+      }
+      
+      case "get-sales-summary": {
+        // GET /dapp/sales/summary - Get sales summary by stage
+        response = await drGreenRequestBody("/dapp/sales/summary", "GET", {});
+        break;
+      }
+      
+      // ==========================================
+      // ADMIN CLIENT SYNC/IMPORT ENDPOINTS
+      // ==========================================
+      
+      case "sync-client-by-email": {
+        // Search Dr Green API for client by email and sync to local database
+        const { email, localUserId } = body || {};
+        
+        if (!email || !validateEmail(email)) {
+          throw new Error("Valid email is required for client sync");
+        }
+        
+        logInfo(`Syncing client by email: ${email.slice(0,3)}***`);
+        
+        // Search for client on Dr Green API
+        const searchResponse = await drGreenRequest(
+          `/dapp/clients?search=${encodeURIComponent(email)}&searchBy=email&take=10&page=1`,
+          "GET"
+        );
+        
+        if (!searchResponse.ok) {
+          const errorText = await searchResponse.text();
+          logError("Dr Green API search failed", { status: searchResponse.status, error: errorText });
+          return new Response(
+            JSON.stringify({ 
+              success: false, 
+              error: `Dr Green API error: ${searchResponse.status}`,
+              message: "Could not search for client on Dr Green. Check API permissions.",
+              apiStatus: searchResponse.status
+            }),
+            { status: 200, headers: { 'Content-Type': 'application/json', ...corsHeaders } }
+          );
+        }
+        
+        const searchData = await searchResponse.json();
+        const clients = searchData?.data?.clients || searchData?.clients || [];
+        
+        if (!clients.length) {
+          return new Response(
+            JSON.stringify({ 
+              success: false, 
+              error: 'not_found',
+              message: `No client found with email: ${email}`,
+              searchResults: 0
+            }),
+            { status: 200, headers: { 'Content-Type': 'application/json', ...corsHeaders } }
+          );
+        }
+        
+        // Find exact email match
+        const matchedClient = clients.find((c: any) => 
+          c.email?.toLowerCase() === email.toLowerCase()
+        ) || clients[0];
+        
+        logInfo("Found client on Dr Green", { 
+          clientId: matchedClient.id || matchedClient.clientId,
+          isKycVerified: matchedClient.isKYCVerified,
+          adminApproval: matchedClient.adminApproval
+        });
+        
+        // If localUserId provided, sync to local database
+        if (localUserId) {
+          const supabaseAdmin = createClient(
+            Deno.env.get('SUPABASE_URL')!,
+            Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
+          );
+          
+          const clientId = matchedClient.id || matchedClient.clientId;
+          const fullName = matchedClient.fullName || 
+            `${matchedClient.firstName || ''} ${matchedClient.lastName || ''}`.trim();
+          
+          // Upsert to local drgreen_clients table
+          const { error: upsertError } = await supabaseAdmin
+            .from('drgreen_clients')
+            .upsert({
+              user_id: localUserId,
+              drgreen_client_id: clientId,
+              email: matchedClient.email,
+              full_name: fullName || null,
+              country_code: matchedClient.countryCode || matchedClient.country || 'PT',
+              is_kyc_verified: matchedClient.isKYCVerified || false,
+              admin_approval: matchedClient.adminApproval || 'PENDING',
+              kyc_link: matchedClient.kycLink || null,
+              updated_at: new Date().toISOString(),
+            }, {
+              onConflict: 'user_id'
+            });
+          
+          if (upsertError) {
+            logError("Failed to upsert client to local DB", { error: upsertError.message });
+            return new Response(
+              JSON.stringify({
+                success: false,
+                error: 'db_error',
+                message: `Found client on Dr Green but failed to sync locally: ${upsertError.message}`,
+                drGreenClient: matchedClient
+              }),
+              { status: 200, headers: { 'Content-Type': 'application/json', ...corsHeaders } }
+            );
+          }
+          
+          logInfo("Client synced to local database", { clientId, localUserId });
+        }
+        
+        return new Response(
+          JSON.stringify({
+            success: true,
+            message: localUserId ? "Client found and synced to local database" : "Client found on Dr Green",
+            client: matchedClient,
+            synced: !!localUserId
+          }),
+          { status: 200, headers: { 'Content-Type': 'application/json', ...corsHeaders } }
+        );
+      }
+      
+      case "search-clients-drgreen": {
+        // Search clients on Dr Green API without syncing
+        const { search, searchBy, page, take } = body || {};
+        
+        if (!search || !validateStringLength(search, 100)) {
+          throw new Error("Search term is required");
+        }
+        
+        const queryParams = new URLSearchParams({
+          search: String(search).slice(0, 100),
+          searchBy: searchBy || 'email',
+          page: String(page || 1),
+          take: String(take || 20),
+          orderBy: 'desc'
+        });
+        
+        logInfo(`Searching Dr Green clients: ${search.slice(0,10)}***`);
+        response = await drGreenRequest(`/dapp/clients?${queryParams.toString()}`, "GET");
+        break;
+      }
+      
+      case "get-client-orders": {
+        // GET /dapp/client/:clientId/orders - Get orders for specific client
+        if (!validateClientId(body.clientId)) {
+          throw new Error("Invalid client ID format");
+        }
+        const { page, take, orderBy } = body || {};
+        
+        if (!validatePagination(page, take)) {
+          throw new Error("Invalid pagination parameters");
+        }
+        
+        const queryParams: Record<string, string | number> = {
+          orderBy: orderBy || 'desc',
+          take: take || 10,
+          page: page || 1,
+        };
+        
+        response = await drGreenRequestQuery(`/dapp/client/${body.clientId}/orders`, queryParams);
+        break;
+      }
+      
+      case "get-user-nfts": {
+        // GET /dapp/users/nfts - Get user's owned NFTs
+        response = await drGreenRequestBody("/dapp/users/nfts", "GET", {});
+        break;
+      }
+      
       default:
         return new Response(
           JSON.stringify({ error: "Unknown action", action }),
@@ -2203,9 +2463,34 @@ serve(async (req) => {
         );
     }
     
-    const data = await response.json();
+    // NOTE: Supabase functions client treats non-2xx as an error and surfaces
+    // "Edge function returned <status>". For admin dApp endpoints, a Dr. Green
+    // upstream 401 is a *permissions/config* issue (not the user's session) and
+    // should be returned as 200 with an explicit apiStatus so the UI can render
+    // a stable message instead of erroring.
+    let data: unknown;
+    try {
+      data = await response.json();
+    } catch {
+      data = { raw: await response.text().catch(() => '') };
+    }
+
     logInfo(`Response status: ${response.status}`);
-    
+
+    if (response.status === 401 && ADMIN_ACTIONS.includes(action)) {
+      return new Response(
+        JSON.stringify({
+          success: false,
+          apiStatus: 401,
+          error: 'drgreen_unauthorized',
+          message:
+            'Dr. Green API credentials are not authorized for dApp endpoints. Update DRGREEN_API_KEY and DRGREEN_PRIVATE_KEY with admin credentials.',
+          upstream: data,
+        }),
+        { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } },
+      );
+    }
+
     return new Response(JSON.stringify(data), {
       status: response.status,
       headers: { ...corsHeaders, "Content-Type": "application/json" },
