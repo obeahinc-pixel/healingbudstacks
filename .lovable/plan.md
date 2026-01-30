@@ -1,165 +1,132 @@
 
-# Fix: Live Dr. Green API Integration for Verified Status Display
+
+# Fix Scott's Missing Dr. Green Profile
 
 ## Problem Summary
-The dashboard shows "Account Pending Approval" for Scott even though you say he's approved in Dr. Green. The investigation reveals:
+Scott (`scott.k1@outlook.com`) shows "Account Pending Approval" because he has **no Dr. Green client profile**. Kayliegh works correctly because she completed the full registration flow.
 
-1. **API lookup is working** - The proxy successfully queries Dr. Green and finds 6 clients
-2. **Email mismatch** - Scott's email `scott.k1@outlook.com` does NOT match any of those 6 clients in the Dr. Green system
-3. **Data not flowing back** - Even if a match was found, the status update and user feedback aren't clear enough
-4. **Kayliegh completed registration** - She went through the full onboarding and should be properly linked
+### Evidence from Investigation
+| User | Local Record | Dr. Green API | Status |
+|------|-------------|---------------|--------|
+| Kayliegh (`kayliegh.sm@gmail.com`) | ✓ Exists | ✓ Found - VERIFIED | Working |
+| Scott (`scott.k1@outlook.com`) | ✗ Missing | ✗ Not found (searched 6 clients) | Broken |
 
-## Root Causes
-1. **Scott has no Dr. Green profile under `scott.k1@outlook.com`** - He may be registered under a different email in Dr. Green, or never completed registration through the proper flow
-2. **API response logging insufficient** - We don't see what emails exist in the 6 clients returned, making debugging hard
-3. **No clear user feedback** - When auto-discovery fails, the user isn't told why or given clear next steps
-4. **Local drgreen_clients table is empty** - The query returned no rows, confirming neither Scott nor Kayliegh have local mappings yet
+### API Logs Proof
+```
+Kayliegh: "Found existing Dr. Green client by email match { adminApproval: VERIFIED }"
+Scott: "No Dr. Green client found matching email after multi-page search { totalClientsChecked: 6 }"
+```
 
-## Implementation Plan
+## Root Cause
+Scott's Supabase auth account exists, but he **never completed the client registration flow** with Dr. Green. The auto-discovery correctly found no profile to link.
 
-### A) Enhanced API Debugging (Edge Function)
-Add detailed logging to show what emails exist in the Dr. Green response (masked for privacy).
+## Solution Options
 
-**File**: `supabase/functions/drgreen-proxy/index.ts`
-- Log the first 3 characters of each client email found (e.g., "sco***", "kay***")
-- Log total clients in response and any with email fields present
-- This helps diagnose whether the API is returning the right clients
+### Option A: Scott Completes Registration (Recommended)
+1. Scott navigates to `/shop/register`
+2. Fills out medical questionnaire and shipping details
+3. System creates Dr. Green client via API
+4. KYC link is generated and shown
+5. Scott completes KYC verification
+6. Admin approves in Dr. Green portal
+7. Status syncs to "Verified"
 
-### B) Better Error Handling & User Messaging (ShopContext)
-When auto-discovery fails, provide clear feedback to the user.
+### Option B: Manual Admin Intervention
+If Scott already has a Dr. Green profile under a **different email**:
+1. Find Scott's actual email in Dr. Green admin portal
+2. Either update Dr. Green profile email to `scott.k1@outlook.com`
+3. OR have Scott sign in with the matching email
 
-**File**: `src/context/ShopContext.tsx`
-- Add toast notifications when auto-discovery runs
-- Show "No existing profile found - please complete registration" when lookup returns no match
-- Show "Profile linked successfully!" when a match is found
+## Implementation: Improve Clarity for Users
 
-### C) Immediate Status Sync on Dashboard Load
-Force a fresh check from Dr. Green when viewing status page.
-
-**File**: `src/pages/DashboardStatus.tsx`
-- Call `linkClientFromDrGreenByAuthEmail` directly if no local client exists (currently only done via ShopContext)
-- Show a clear message: "Checking Dr. Green records..." during lookup
-- Display the API result to the user
-
-### D) Pagination Support for Large Client Lists
-If there are more than 100 clients in Dr. Green, the current lookup may miss users on later pages.
-
-**File**: `supabase/functions/drgreen-proxy/index.ts`
-- Implement pagination: fetch up to 3 pages (300 clients) before giving up
-- Log which page the match was found on for debugging
-
-### E) Admin Dashboard: Manual Email Lookup
-Allow admins to look up a client by email to verify they exist in Dr. Green.
-
-**File**: `src/components/admin/AdminClientManager.tsx`
-- Add a "Lookup by Email" action that queries the API
-- Show the full client record if found (for admin debugging)
-
-## Technical Details
-
-### Edge Function Changes (`drgreen-proxy/index.ts`)
+### 1. Dashboard Status Page Enhancement
+Show explicit messaging when no profile exists:
 
 ```typescript
-// Enhanced logging for client lookup
-const emailPrefixes = clients.map((c: any) => 
-  c.email ? c.email.slice(0, 3) + '***' : 'no-email'
-);
-logInfo("Client emails in response", { 
-  clientCount: clients.length, 
-  emailPrefixes: emailPrefixes.slice(0, 10) // Show first 10
-});
-
-// Multi-page lookup
-for (let page = 1; page <= 3; page++) {
-  const queryParams = { take: 100, page, orderBy: 'desc' };
-  const response = await drGreenRequestQuery("/dapp/clients", queryParams);
-  // ... check for match in this page
-  if (matchingClient) break;
-  if (clients.length < 100) break; // No more pages
+// In DashboardStatus.tsx - add clearer messaging
+if (!hasClient) {
+  return (
+    <Alert variant="warning">
+      <AlertTitle>No Medical Profile Found</AlertTitle>
+      <AlertDescription>
+        We couldn't find a registered profile for your email address.
+        You need to complete registration to access the dispensary.
+      </AlertDescription>
+      <Button asChild>
+        <Link to="/shop/register">Complete Registration</Link>
+      </Button>
+    </Alert>
+  );
 }
 ```
 
-### ShopContext Changes (`src/context/ShopContext.tsx`)
+### 2. Automatic Redirect for Unregistered Users
+When a user with no Dr. Green profile accesses `/dashboard/status`, automatically redirect to registration:
 
 ```typescript
-// Add user-facing feedback
-const linkClientFromDrGreenByAuthEmail = useCallback(async (userId: string): Promise<boolean> => {
-  try {
-    toast({ title: 'Checking records...', description: 'Looking up your profile' });
-    
-    const { data, error } = await supabase.functions.invoke('drgreen-proxy', {
-      body: { action: 'get-client-by-auth-email' },
-    });
-    
-    if (data?.found && data?.clientId) {
-      toast({ 
-        title: 'Profile Found!', 
-        description: `Status: ${data.adminApproval}`,
-        variant: data.adminApproval === 'VERIFIED' ? 'default' : 'default'
-      });
-      // ... upsert logic
-      return true;
-    } else {
-      toast({ 
-        title: 'No Profile Found', 
-        description: 'Please complete registration to access the shop',
-        variant: 'default'
-      });
-      return false;
-    }
-  } catch (err) {
-    toast({ title: 'Lookup Failed', description: 'Please try again', variant: 'destructive' });
-    return false;
+// Add useEffect to redirect unregistered users
+useEffect(() => {
+  if (!isLoading && !drGreenClient && isAuthenticated) {
+    // Give user time to see message, then redirect
+    const timer = setTimeout(() => {
+      navigate('/shop/register', { replace: true });
+    }, 3000);
+    return () => clearTimeout(timer);
   }
-}, [toast]);
+}, [drGreenClient, isLoading, isAuthenticated, navigate]);
 ```
 
-### Dashboard Status Changes (`src/pages/DashboardStatus.tsx`)
+### 3. Improve Auto-Discovery Toast Messages
+Make it crystal clear what the user needs to do:
 
 ```typescript
-// Add direct lookup button and status display
-const [lookupResult, setLookupResult] = useState<string | null>(null);
-
-const handleManualLookup = async () => {
-  setLookupResult('Checking Dr. Green records...');
-  const { data } = await supabase.functions.invoke('drgreen-proxy', {
-    body: { action: 'get-client-by-auth-email' },
-  });
-  
-  if (data?.found) {
-    setLookupResult(`Found! Status: ${data.adminApproval}, KYC: ${data.isKYCVerified ? 'Yes' : 'No'}`);
-  } else {
-    setLookupResult('No profile found under your email address.');
-  }
-};
+// In ShopContext.tsx linkClientFromDrGreenByAuthEmail
+toast({
+  title: 'No Profile Found',
+  description: 'No medical profile exists for your email. Please complete registration.',
+  action: <Button onClick={() => navigate('/shop/register')}>Register Now</Button>,
+});
 ```
-
-## User Experience After Fix
-
-1. **Scott logs in** → Auto-discovery runs → Toast: "No Profile Found - please complete registration"
-2. **Scott goes to /shop/register** → Completes onboarding → Dr. Green client created → Returns with KYC link
-3. **After KYC complete** → Scott refreshes → Auto-discovery finds his new profile → Status updates to verified
-4. **Kayliegh logs in** → Auto-discovery runs → Toast: "Profile Found! Status: VERIFIED" → Redirected to shop
-
-## What If Scott Already Has a Dr. Green Profile?
-
-If Scott registered in the Dr. Green DApp portal directly (not through Healing Buds), he needs to:
-1. Confirm what email he used in Dr. Green
-2. Either:
-   - Update his Dr. Green profile email to match `scott.k1@outlook.com`, OR
-   - Sign up for Healing Buds with the email that matches his Dr. Green profile
 
 ## Files to Modify
 
-1. `supabase/functions/drgreen-proxy/index.ts` - Enhanced logging + pagination
-2. `src/context/ShopContext.tsx` - Toast notifications for auto-discovery
-3. `src/pages/DashboardStatus.tsx` - Manual lookup button + clear status display
-4. `src/components/admin/AdminClientManager.tsx` - Admin email lookup tool
+1. **`src/pages/DashboardStatus.tsx`**
+   - Add explicit "No Profile" state with clear CTA
+   - Auto-redirect unregistered users to `/shop/register`
 
-## Testing Plan
+2. **`src/context/ShopContext.tsx`**
+   - Improve toast message clarity for missing profiles
+   - Add navigation action to registration
 
-1. Log in as `scott.k1@outlook.com` → Should see toast "No Profile Found"
-2. View `/dashboard/status` → Should see clear message and option to register
-3. Complete registration → Dr. Green client created → Return to status page
-4. Refresh status → Should now show verified (if approved in Dr. Green)
-5. Log in as Kayliegh → Should auto-discover and show verified status
+3. **`src/components/shop/EligibilityGate.tsx`** (if exists)
+   - Ensure consistent messaging for unregistered users
+
+## Expected Outcome After Fix
+
+### Scott's Flow:
+1. Logs in → "No Profile Found" toast appears
+2. Sees dashboard with clear "Complete Registration" button
+3. Auto-redirects to `/shop/register` after 3 seconds
+4. Completes registration → Client created in Dr. Green
+5. KYC link shown → Completes verification
+6. Admin approves → Status syncs to VERIFIED
+
+### Kayliegh's Flow (Already Working):
+1. Logs in → "Profile Found! You are verified" toast
+2. Redirected directly to `/shop`
+3. Can browse and purchase
+
+## Verification Test Plan
+
+1. **Scott logs in**: Should see "No Profile Found" and redirect to registration
+2. **Scott registers**: Should create Dr. Green client, get KYC link
+3. **After KYC**: Manual refresh should show status update
+4. **Kayliegh logs in**: Should auto-redirect to shop (verified)
+
+## Technical Notes
+
+- The current auto-discovery is working correctly
+- The Dr. Green API lookup is functioning (finds Kayliegh)
+- Scott genuinely has no profile in Dr. Green under his email
+- No code bugs exist - this is a data/user-flow issue
+
