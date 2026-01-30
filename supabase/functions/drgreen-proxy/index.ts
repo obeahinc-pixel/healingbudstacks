@@ -109,7 +109,7 @@ const COUNTRY_GATED_ACTIONS = [
 const OPEN_COUNTRIES = ['ZAF', 'THA'];
 
 // Authenticated but no ownership check needed
-const AUTH_ONLY_ACTIONS: string[] = ['get-user-me'];
+const AUTH_ONLY_ACTIONS: string[] = ['get-user-me', 'get-client-by-auth-email'];
 
 // Admin debug mode: allows bypassing auth for specific actions when debug header is present
 // Uses first 16 chars of DRGREEN_PRIVATE_KEY as the debug secret
@@ -2204,6 +2204,93 @@ serve(async (req) => {
         // GET /user/me - Get current authenticated user details
         response = await drGreenRequestBody("/user/me", "GET", {});
         break;
+      }
+      
+      // Secure self-lookup: find existing Dr. Green client by authenticated user's email
+      // This action uses the JWT email from the token - request body email is IGNORED
+      // This prevents privacy leaks (users cannot probe other emails)
+      case "get-client-by-auth-email": {
+        // Get user email from the authenticated token
+        const authResult = await verifyAuthentication(req);
+        if (!authResult) {
+          return new Response(
+            JSON.stringify({ error: 'Authentication required' }),
+            { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+          );
+        }
+        
+        const userEmail = authResult.user.email;
+        if (!userEmail) {
+          return new Response(
+            JSON.stringify({ success: false, error: 'No email found in auth token', found: false }),
+            { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+          );
+        }
+        
+        logInfo("Looking up Dr. Green client by auth email", { emailPrefix: userEmail.slice(0, 5) + '***' });
+        
+        // Search Dr. Green API by email
+        try {
+          const queryParams: Record<string, string | number> = {
+            search: userEmail,
+            searchBy: 'email',
+            take: 1,
+            orderBy: 'desc',
+          };
+          
+          const searchResponse = await drGreenRequestQuery("/dapp/clients", queryParams);
+          
+          if (!searchResponse.ok) {
+            logWarn("Dr. Green client search failed", { status: searchResponse.status });
+            return new Response(
+              JSON.stringify({ success: false, found: false, error: 'API search failed' }),
+              { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+            );
+          }
+          
+          const searchData = await searchResponse.json();
+          const clients = searchData.data || searchData.clients || searchData;
+          
+          if (Array.isArray(clients) && clients.length > 0) {
+            const client = clients[0];
+            // Normalize the response to a consistent format
+            const normalizedClient = {
+              success: true,
+              found: true,
+              clientId: client.id || client.clientId || client.client_id,
+              email: client.email,
+              firstName: client.firstName || client.first_name,
+              lastName: client.lastName || client.last_name,
+              isKYCVerified: client.isKYCVerified ?? client.is_kyc_verified ?? false,
+              adminApproval: client.adminApproval || client.admin_approval || 'PENDING',
+              kycLink: client.kycLink || client.kyc_link || null,
+              countryCode: client.countryCode || client.country_code || null,
+            };
+            
+            logInfo("Found existing Dr. Green client", { 
+              hasClientId: !!normalizedClient.clientId,
+              isVerified: normalizedClient.isKYCVerified,
+              adminApproval: normalizedClient.adminApproval,
+            });
+            
+            return new Response(JSON.stringify(normalizedClient), {
+              status: 200,
+              headers: { ...corsHeaders, "Content-Type": "application/json" },
+            });
+          } else {
+            logInfo("No Dr. Green client found for email");
+            return new Response(
+              JSON.stringify({ success: true, found: false, message: 'No client found for this email' }),
+              { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+            );
+          }
+        } catch (e) {
+          logError("Error searching for client by email", { error: e instanceof Error ? e.message : 'Unknown' });
+          return new Response(
+            JSON.stringify({ success: false, found: false, error: 'Search failed' }),
+            { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+          );
+        }
       }
       
       case "delete-client": {

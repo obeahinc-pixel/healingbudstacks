@@ -524,9 +524,60 @@ export function ClientOnboarding() {
         return;
       }
 
-      // Prepare client data
-      let clientId = `local-${Date.now()}`;
-      let kycLink = null;
+      // First, check if user already has a Dr. Green client (prevent duplicates)
+      console.log('[Registration] Checking for existing Dr. Green client...');
+      try {
+        const { data: existingCheck, error: checkError } = await supabase.functions.invoke('drgreen-proxy', {
+          body: { action: 'get-client-by-auth-email' },
+        });
+        
+        if (!checkError && existingCheck?.found && existingCheck?.clientId) {
+          console.log('[Registration] Found existing Dr. Green client:', existingCheck.clientId);
+          
+          // User already has a Dr. Green client - link it instead of creating new
+          const { error: upsertError } = await supabase.from('drgreen_clients').upsert({
+            user_id: user.id,
+            drgreen_client_id: existingCheck.clientId,
+            country_code: formData.address?.country || 'PT',
+            is_kyc_verified: existingCheck.isKYCVerified ?? false,
+            admin_approval: existingCheck.adminApproval || 'PENDING',
+            kyc_link: existingCheck.kycLink || null,
+            email: formData.personal?.email || null,
+            full_name: formData.personal ? `${formData.personal.firstName} ${formData.personal.lastName}`.trim() : null,
+          }, {
+            onConflict: 'user_id',
+          });
+          
+          if (upsertError) {
+            console.error('[Registration] Failed to link existing client:', upsertError);
+          } else {
+            clearInterval(progressInterval);
+            setKycProgress(100);
+            setStoredClientId(existingCheck.clientId);
+            setKycLinkReceived(!!existingCheck.kycLink);
+            setKycStatus('success');
+            setCurrentStep(5);
+            await refreshClient();
+            
+            toast({
+              title: 'Account linked!',
+              description: existingCheck.isKYCVerified 
+                ? 'Your verified account has been linked.' 
+                : 'Please complete KYC verification to continue.',
+            });
+            
+            setIsSubmitting(false);
+            return;
+          }
+        }
+      } catch (checkErr) {
+        console.log('[Registration] Existing client check failed, proceeding with creation:', checkErr);
+        // Continue with creation if check fails
+      }
+
+      // Prepare client data - NO local-* fallback
+      let clientId: string | null = null;
+      let kycLink: string | null = null;
       let apiSuccess = false;
 
       // Build legacy-compatible payload
@@ -716,29 +767,43 @@ export function ClientOnboarding() {
             error: 'api_permission_denied',
             message: 'Dr Green API credentials lack required permissions'
           });
-          
-          toast({
-            title: 'Registration system issue',
-            description: 'We\'ve saved your details. Our team has been notified and will contact you shortly.',
-          });
         } else {
-          // Edge function failed - continue with local client ID
-          console.warn('[Registration] Dr Green API unavailable, using local client ID');
+          // Edge function failed - NO local-* fallback, show hard error
+          console.error('[Registration] Dr Green API unavailable - blocking registration');
           logEvent('registration.error', 'pending', { error: 'api_unavailable', errorMessage: apiError?.message });
-          
-          // Show user feedback about fallback
-          toast({
-            title: 'Registration saved locally',
-            description: 'We saved your details but could not connect to the verification service. Our team will contact you.',
-        });
         }
+        
+        // API failed - do NOT create local client record, show blocking error
+        clearInterval(progressInterval);
+        setKycStatus('error');
+        setDocumentError('api_unavailable');
+        toast({
+          title: 'Registration failed',
+          description: 'Could not connect to the verification service. Please try again.',
+          variant: 'destructive',
+        });
+        setIsSubmitting(false);
+        return;
+      }
+
+      // Only proceed if we got a valid clientId from the API
+      if (!clientId) {
+        clearInterval(progressInterval);
+        setKycStatus('error');
+        setDocumentError('api_unavailable');
+        toast({
+          title: 'Registration incomplete',
+          description: 'Could not create your patient profile. Please try again.',
+          variant: 'destructive',
+        });
+        setIsSubmitting(false);
+        return;
       }
 
       clearInterval(progressInterval);
       setKycProgress(100);
 
-      // Store client info locally (upsert to handle re-registration attempts)
-      // Include email and full_name for manual email triggers if API fails
+      // Store client info locally - only with valid API-provided clientId
       const { error: dbError } = await supabase.from('drgreen_clients').upsert({
         user_id: user.id,
         drgreen_client_id: clientId,
@@ -2148,6 +2213,73 @@ export function ClientOnboarding() {
                   </Button>
                   <p className="text-xs text-muted-foreground">
                     Still having issues? Please <button onClick={() => navigate('/support')} className="text-primary underline">contact support</button> for assistance.
+                  </p>
+                </div>
+              </CardContent>
+            </Card>
+          </motion.div>
+        )}
+
+        {/* API Unavailable Error Screen */}
+        {currentStep === 4 && documentError === 'api_unavailable' && (
+          <motion.div
+            key="api-error"
+            initial={{ opacity: 0, scale: 0.95 }}
+            animate={{ opacity: 1, scale: 1 }}
+          >
+            <Card className="bg-card/50 backdrop-blur-sm border-destructive/30">
+              <CardContent className="pt-8 pb-8 text-center">
+                <motion.div
+                  initial={{ scale: 0 }}
+                  animate={{ scale: 1 }}
+                  transition={{ type: 'spring', delay: 0.2 }}
+                  className="h-20 w-20 rounded-full bg-amber-500/10 flex items-center justify-center mx-auto mb-6"
+                >
+                  <AlertTriangle className="h-10 w-10 text-amber-500" />
+                </motion.div>
+                <h2 className="text-2xl font-bold mb-2">Connection Issue</h2>
+                <p className="text-muted-foreground mb-6">
+                  We couldn't connect to the verification service. This is usually temporary.
+                </p>
+                
+                <div className="bg-muted/30 rounded-lg p-4 mb-6 text-left">
+                  <h3 className="font-medium mb-3">What you can do:</h3>
+                  <ul className="text-sm text-muted-foreground space-y-2">
+                    <li className="flex items-start gap-2">
+                      <span className="text-primary">1.</span>
+                      Wait a moment and try again
+                    </li>
+                    <li className="flex items-start gap-2">
+                      <span className="text-primary">2.</span>
+                      Check your internet connection
+                    </li>
+                    <li className="flex items-start gap-2">
+                      <span className="text-primary">3.</span>
+                      If the problem persists, contact our support team
+                    </li>
+                  </ul>
+                </div>
+
+                <div className="space-y-3">
+                  <Button
+                    onClick={retrySubmission}
+                    className="w-full"
+                    disabled={isSubmitting}
+                  >
+                    {isSubmitting ? (
+                      <>
+                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                        Retrying...
+                      </>
+                    ) : (
+                      <>
+                        <RefreshCw className="mr-2 h-4 w-4" />
+                        Try Again
+                      </>
+                    )}
+                  </Button>
+                  <p className="text-xs text-muted-foreground">
+                    Need help? <button onClick={() => navigate('/support')} className="text-primary underline">Contact support</button>
                   </p>
                 </div>
               </CardContent>
