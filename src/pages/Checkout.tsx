@@ -20,7 +20,7 @@ const Checkout = () => {
   const navigate = useNavigate();
   const { t } = useTranslation('shop');
   const { toast } = useToast();
-  const { createOrder, createPayment, getPayment, addToCart, emptyCart, placeOrder } = useDrGreenApi();
+  const { createPayment, getPayment, addToCart, emptyCart, placeOrder } = useDrGreenApi();
   const { saveOrder } = useOrderTracking();
   const [isProcessing, setIsProcessing] = useState(false);
   const [orderComplete, setOrderComplete] = useState(false);
@@ -31,15 +31,21 @@ const Checkout = () => {
     if (!drGreenClient || cart.length === 0) return;
 
     setIsProcessing(true);
-    setPaymentStatus('Syncing cart...');
+    setPaymentStatus('Preparing order...');
 
     try {
       const clientId = drGreenClient.drgreen_client_id;
 
       // Step 1: Empty existing Dr. Green cart to ensure clean state
-      await emptyCart(clientId);
+      setPaymentStatus('Clearing cart...');
+      const emptyResult = await emptyCart(clientId);
+      // Empty cart may return 404 if cart doesn't exist - that's OK
+      if (emptyResult.error && !emptyResult.error.includes('404') && !emptyResult.error.includes('not found')) {
+        console.warn('Cart empty warning:', emptyResult.error);
+      }
 
       // Step 2: Add each item to Dr. Green server-side cart
+      setPaymentStatus('Syncing cart items...');
       for (const item of cart) {
         const cartResult = await addToCart({
           clientId: clientId,
@@ -52,9 +58,8 @@ const Checkout = () => {
         }
       }
 
+      // Step 3: Create order from server-side cart  
       setPaymentStatus('Creating order...');
-
-      // Step 3: Create order from server-side cart
       const orderResult = await placeOrder({
         clientId: clientId,
       });
