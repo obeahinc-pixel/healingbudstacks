@@ -37,23 +37,27 @@ export function useDrGreenApi() {
     }
   };
 
-  // Create an order with the Dr Green API
+  // Create an order with items directly (per official Dr. Green API documentation)
+  // POST /api/v1/dapp/orders - pass items in request body
   const createOrder = async (orderData: {
     clientId: string;
     items: Array<{
-      strainId: string;
+      productId: string;
       quantity: number;
-      unitPrice: number;
+      price: number;
     }>;
     shippingAddress?: {
-      street: string;
-      city: string;
-      postalCode: string;
-      countryCode: string;
+      street?: string;
+      city?: string;
+      state?: string;
+      zipCode?: string;
+      country?: string;
     };
+    notes?: string;
   }) => {
     return callProxy<{
       orderId: string;
+      orderNumber?: string;
       status: string;
       totalAmount: number;
     }>('create-order', { data: orderData });

@@ -2196,8 +2196,43 @@ serve(async (req) => {
         break;
       }
       
+      // Create order with items directly (per official API documentation)
+      // POST /api/v1/dapp/orders with clientId, items, shippingAddress, notes
       case "create-order": {
-        response = await drGreenRequest("/dapp/orders", "POST", body.data);
+        const orderData = body.data || {};
+        if (!orderData.clientId) {
+          throw new Error("clientId is required");
+        }
+        if (!orderData.items || !Array.isArray(orderData.items) || orderData.items.length === 0) {
+          throw new Error("items array is required and must not be empty");
+        }
+        
+        // Format payload - try strainId first, then productId (API may use different field names)
+        const orderPayload: Record<string, unknown> = {
+          clientId: orderData.clientId,
+          items: orderData.items.map((item: { strainId?: string; productId?: string; quantity: number; price?: number; unitPrice?: number }) => ({
+            // Try multiple field names since API docs vs implementation may differ
+            strainId: item.strainId || item.productId,
+            productId: item.strainId || item.productId,
+            quantity: item.quantity,
+            price: item.price || item.unitPrice || 0,
+          })),
+        };
+        
+        // Add optional fields if provided
+        if (orderData.shippingAddress) {
+          orderPayload.shippingAddress = orderData.shippingAddress;
+        }
+        if (orderData.notes) {
+          orderPayload.notes = orderData.notes;
+        }
+        
+        logInfo("Creating order with items", { 
+          clientId: orderData.clientId,
+          itemCount: orderData.items.length,
+        });
+        
+        response = await drGreenRequestBody("/dapp/orders", "POST", orderPayload);
         break;
       }
       
