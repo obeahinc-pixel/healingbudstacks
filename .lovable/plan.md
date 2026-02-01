@@ -1,114 +1,244 @@
 
-# Fix: Allow Checkout Even When Address API Update Fails
+# Seamless Checkout with Saved Address + Alternative Delivery Option
 
-## Problem Identified
+## Problem Summary
 
-The shipping address form is **blocking checkout** because it requires the `updateShippingAddress` API call to succeed before enabling the "Place Order" button. But this API call fails with 401 for the same reason `getClientDetails` fails - the Dr. Green API returns 401 for client operations on certain client IDs.
+The current checkout flow has two issues:
 
-**Current Flow (Broken):**
-1. User fills shipping form, clicks "Save Address"
-2. Form calls `updateShippingAddress(clientId, ...)` → **Fails with 401**
-3. Error thrown → `onSuccess` never called
-4. `needsShippingAddress` stays `true` → "Place Order" button remains disabled
-5. User is stuck!
+1. **Cart-based orders ignore shipping** - The `placeOrder({ clientId })` call doesn't pass shipping address
+2. **No option to use alternative delivery address** - Users in South Africa often need to ship to work or pickup points
 
-## Root Cause
+## Solution: Prioritize Direct Order Creation with Shipping
 
-The form treats the API update as **required** for checkout. But per the API documentation you provided, we can pass `shippingAddress` directly in the `createOrder` payload - we don't need to update the client profile first.
+Since the direct `createOrder` method properly includes the shipping address in the API payload, we should:
 
-## Solution: Make API Update Optional
+1. **Make direct order creation the PRIMARY method** (not fallback)
+2. **Show saved address with option to change** (use different delivery address)
+3. **Always include shipping in the order payload** to Dr. Green API
 
-Modify `ShippingAddressForm` to call `onSuccess` with the address data **even if the API update fails**. The address will still be passed to `createOrder` in the checkout flow.
+## Technical Implementation
 
-**New Flow:**
-1. User fills shipping form, clicks "Save Address"
-2. Form calls `updateShippingAddress(clientId, ...)` → May fail (that's OK)
-3. Form calls `onSuccess(shippingData)` regardless of API result
-4. `needsShippingAddress` becomes `false` → Button enabled
-5. User clicks "Place Order" → Address included in order payload
-6. Order created successfully in Dr. Green
+### Change 1: Update Checkout Flow Priority
 
-## Technical Changes
+**File: `src/pages/Checkout.tsx`**
 
-### File: `src/components/shop/ShippingAddressForm.tsx`
+Currently the flow is:
+1. Try cart-based `placeOrder` (no shipping) → 2. Fallback to `createOrder` (has shipping)
 
-Update the `handleSubmit` function to make the API update optional:
+**NEW flow:**
+1. Use `createOrder` directly with items + shipping (guaranteed to include address)
+2. Skip cart-based flow entirely for reliability
 
 ```typescript
-const handleSubmit = async (data: AddressFormData) => {
-  setIsSaving(true);
-  setSaveSuccess(false);
+const handlePlaceOrder = async () => {
+  // ... validation ...
+  
+  setPaymentStatus('Creating order...');
+  
+  // Use direct order creation (includes shipping in payload)
+  const orderResult = await retryOperation(
+    () => createOrder({
+      clientId: clientId,
+      items: cart.map(item => ({
+        productId: item.strain_id,
+        quantity: item.quantity,
+        price: item.unit_price,
+      })),
+      shippingAddress: {
+        street: shippingAddress.address1,
+        address2: shippingAddress.address2,
+        city: shippingAddress.city,
+        state: shippingAddress.state || shippingAddress.city,
+        zipCode: shippingAddress.postalCode,
+        country: shippingAddress.country,
+        countryCode: shippingAddress.countryCode,
+      },
+    }),
+    'Create order'
+  );
+  
+  if (orderResult.error || !orderResult.data?.orderId) {
+    throw new Error(orderResult.error || 'Failed to create order');
+  }
+  
+  // Continue to payment...
+};
+```
 
-  try {
-    const alpha3CountryCode = countryCodeMap[data.country] || data.country;
+### Change 2: Add "Use Saved vs Different Address" Toggle
+
+**File: `src/pages/Checkout.tsx`**
+
+Add state and UI for address selection:
+
+```typescript
+// New state
+const [addressMode, setAddressMode] = useState<'saved' | 'custom'>('saved');
+const [savedAddress, setSavedAddress] = useState<ShippingAddress | null>(null);
+
+// Update useEffect to capture saved address
+useEffect(() => {
+  const checkShippingAddress = async () => {
+    // ... existing fetch logic ...
     
-    const shippingData: ShippingAddress = {
-      address1: data.address1.trim(),
-      address2: data.address2?.trim() || '',
-      landmark: data.landmark?.trim() || '',
-      city: data.city.trim(),
-      state: data.state?.trim() || data.city.trim(),
-      country: getCountryName(data.country),
-      countryCode: alpha3CountryCode,
-      postalCode: data.postalCode.trim(),
-    };
-
-    // Try to update address in Dr. Green API (optional - don't block on failure)
-    try {
-      const result = await updateShippingAddress(clientId, shippingData);
-      if (result.error) {
-        console.warn('Could not sync address to Dr. Green API:', result.error);
-        // Continue anyway - address will be included in order payload
-      }
-    } catch (apiError) {
-      console.warn('Address sync to API failed:', apiError);
-      // Continue anyway
+    if (result.data?.shipping && result.data.shipping.address1) {
+      setSavedAddress(result.data.shipping);
+      setShippingAddress(result.data.shipping); // Use saved by default
+      setNeedsShippingAddress(false);
+    } else {
+      setNeedsShippingAddress(true);
     }
+  };
+}, [drGreenClient]);
 
-    // Always succeed and pass address to checkout
-    setSaveSuccess(true);
-    toast({
-      title: 'Address Confirmed',
-      description: 'Your shipping address is ready for checkout.',
-    });
-
-    onSuccess?.(shippingData);
-  } catch (error) {
-    // Only fail if there's a form validation error
-    console.error('Failed to process shipping address:', error);
-    toast({
-      title: 'Error',
-      description: error instanceof Error ? error.message : 'Please check your address.',
-      variant: 'destructive',
-    });
-  } finally {
-    setIsSaving(false);
+// Update address mode handler
+const handleAddressModeChange = (mode: 'saved' | 'custom') => {
+  setAddressMode(mode);
+  if (mode === 'saved' && savedAddress) {
+    setShippingAddress(savedAddress);
   }
 };
 ```
 
-## Why This is the Right Approach
+**UI Component:**
 
-1. **Dr. Green remains source of truth** - The order is created in Dr. Green with the shipping address in the payload
-2. **No local data duplication** - We're not storing addresses in Supabase
-3. **Checkout not blocked by API permission issues** - The 401 on profile update doesn't prevent ordering
-4. **Per API docs** - `POST /dapp/orders` accepts `shippingAddress` directly
+```jsx
+{savedAddress && !needsShippingAddress && (
+  <Card className="bg-card/50 backdrop-blur-sm border-border/50">
+    <CardHeader>
+      <CardTitle className="flex items-center gap-2">
+        <MapPin className="h-5 w-5" />
+        Delivery Address
+      </CardTitle>
+    </CardHeader>
+    <CardContent>
+      <RadioGroup value={addressMode} onValueChange={handleAddressModeChange}>
+        {/* Option 1: Use saved address */}
+        <div className="flex items-start gap-3 p-3 rounded-lg border">
+          <RadioGroupItem value="saved" id="addr-saved" />
+          <Label htmlFor="addr-saved" className="flex-1 cursor-pointer">
+            <span className="font-medium">Use saved address</span>
+            <div className="text-sm text-muted-foreground mt-1">
+              {savedAddress.address1}<br />
+              {savedAddress.city}, {savedAddress.postalCode}<br />
+              {savedAddress.country}
+            </div>
+          </Label>
+        </div>
+        
+        {/* Option 2: Different address */}
+        <div className="flex items-start gap-3 p-3 rounded-lg border">
+          <RadioGroupItem value="custom" id="addr-custom" />
+          <Label htmlFor="addr-custom" className="cursor-pointer">
+            <span className="font-medium">Ship to a different address</span>
+            <span className="text-sm text-muted-foreground ml-2">
+              (work, pickup point, etc.)
+            </span>
+          </Label>
+        </div>
+      </RadioGroup>
+      
+      {/* Show form when custom selected */}
+      {addressMode === 'custom' && (
+        <div className="mt-4 pt-4 border-t">
+          <ShippingAddressForm
+            clientId={drGreenClient.drgreen_client_id}
+            initialAddress={savedAddress} // Pre-fill with saved data
+            defaultCountry={savedAddress.countryCode || countryCode}
+            onSuccess={handleShippingAddressSaved}
+            submitLabel="Confirm Address"
+            variant="inline"
+          />
+        </div>
+      )}
+    </CardContent>
+  </Card>
+)}
+```
 
-## Summary
+### Change 3: Ensure Shipping is ALWAYS Required Before Order
 
-| Component | Before | After |
-|-----------|--------|-------|
-| Address form | Blocks if API fails | Continues regardless |
-| Address storage | Required API update | Passed in order payload |
-| Checkout button | Disabled on API error | Enabled after form submit |
-| Order creation | May not include address | Always includes address |
+**File: `src/pages/Checkout.tsx`**
+
+Add validation before order placement:
+
+```typescript
+const handlePlaceOrder = async () => {
+  // Validate shipping address exists
+  if (!shippingAddress || !shippingAddress.address1) {
+    toast({
+      title: 'Shipping Address Required',
+      description: 'Please provide a shipping address before placing your order.',
+      variant: 'destructive',
+    });
+    return;
+  }
+  
+  // ... rest of order logic ...
+};
+```
+
+### Change 4: Update ShippingAddressForm for Inline Variant
+
+**File: `src/components/shop/ShippingAddressForm.tsx`**
+
+Add `initialAddress` prop to pre-populate form with saved address:
+
+```typescript
+interface ShippingAddressFormProps {
+  clientId: string;
+  defaultCountry?: string;
+  initialAddress?: ShippingAddress; // NEW: Pre-fill form
+  onSuccess?: (address: ShippingAddress) => void;
+  submitLabel?: string;
+  variant?: 'default' | 'inline';
+}
+
+// In component:
+const form = useForm({
+  defaultValues: {
+    address1: initialAddress?.address1 || '',
+    address2: initialAddress?.address2 || '',
+    city: initialAddress?.city || '',
+    state: initialAddress?.state || '',
+    postalCode: initialAddress?.postalCode || '',
+    country: initialAddress?.countryCode || defaultCountry || 'ZA',
+    landmark: initialAddress?.landmark || '',
+  },
+});
+```
+
+## Why This Approach is Seamless
+
+| Aspect | Before | After |
+|--------|--------|-------|
+| **Order Creation** | Cart-based (no shipping) → Fallback (with shipping) | Direct order with shipping (always) |
+| **Shipping in API** | Sometimes missing | Always included |
+| **UX for SA users** | No option to change | Toggle saved vs. custom |
+| **Form pre-fill** | Empty form | Pre-filled from saved |
+| **API reliability** | Two methods, one may fail | Single robust method |
+
+## Files to Modify
+
+| File | Changes |
+|------|---------|
+| `src/pages/Checkout.tsx` | Add address mode toggle, use direct order creation, add validation |
+| `src/components/shop/ShippingAddressForm.tsx` | Add `initialAddress` prop for pre-population |
 
 ## Testing Checklist
 
 After implementation:
-1. Log in as Kayliegh
-2. Add item to cart, proceed to checkout
-3. Fill shipping address form
-4. Click "Save Address" - should succeed even if API returns error
-5. "Place Order" button should now be enabled
-6. Click "Place Order" - order should be created with shipping address
+1. **Saved address flow**: Log in as verified patient with saved address → See "Use saved address" selected → Click Place Order → Order created with correct address
+2. **Custom address flow**: Select "Ship to different address" → Form pre-fills with saved data → Edit address → Confirm → Place Order → Order has custom address
+3. **No saved address**: New user without address → Form appears directly → Fill → Place Order works
+4. **API verification**: Check edge function logs confirm `shippingAddress` included in order payload
+5. **Dr. Green system**: Verify order appears with correct shipping in admin portal
+
+## Summary
+
+This plan ensures:
+- Orders are **always** created with shipping address via the Dr. Green API
+- The `POST /dapp/orders` endpoint receives the complete payload
+- Users can easily choose between saved address and alternative delivery
+- South African customers can ship to work/pickup points
+- Single, reliable order creation path (no fallback complexity)
