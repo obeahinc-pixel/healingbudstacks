@@ -108,8 +108,13 @@ const Checkout = () => {
   };
 
   const handleShippingAddressSaved = (address: ShippingAddress) => {
+    console.log('[Checkout] Address saved:', address);
+    // Set address FIRST, before changing needsShippingAddress
     setShippingAddress(address);
+    setSavedAddress(address); // Also save as "saved" address
+    // Then update state to show the address selection UI
     setNeedsShippingAddress(false);
+    setAddressMode('saved');
     toast({
       title: 'Shipping Address Saved',
       description: 'You can now proceed with your order.',
