@@ -137,6 +137,7 @@ export function ShippingAddressForm({
   const selectedCountry = form.watch('country');
 
   const handleSubmit = async (data: AddressFormData) => {
+    console.log('[ShippingAddressForm] Form submitted with:', data);
     setIsSaving(true);
     setSaveSuccess(false);
 
@@ -174,6 +175,7 @@ export function ShippingAddressForm({
         description: 'Your shipping address is ready for checkout.',
       });
 
+      console.log('[ShippingAddressForm] Calling onSuccess with:', shippingData);
       onSuccess?.(shippingData);
     } catch (error) {
       // Only fail if there's a form validation error
