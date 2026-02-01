@@ -1,182 +1,98 @@
 
-# Plan: Admin Role Management UI
+# Fix: Currency Conversion in Checkout Display
 
-## Overview
+## Problem Analysis
 
-Create a new admin page for managing user roles that allows administrators to:
-- View all registered users with their current roles
-- Assign roles (admin, moderator, user)
-- Remove roles from users
-- Search and filter users
+The checkout page is displaying Euro prices (from the Dr. Green API) with the Rand symbol, instead of properly converting EUR to ZAR.
 
-## Architecture
+**Current behavior:** €10.00 → Displays as "R 10,00" (wrong)
+**Expected behavior:** €10.00 → Displays as "R ~193,00" (correct ZAR conversion)
 
-The system already has:
-- `user_roles` table with proper RLS policies
-- `app_role` enum: `admin | moderator | user`
-- `has_role()` RPC function for role checking
-- `AdminLayout` component for consistent admin UI
+## Root Cause
 
-## Implementation Plan
-
-### 1. Create New Admin Component: `AdminUserRoles.tsx`
-
-**Location:** `src/components/admin/AdminUserRoles.tsx`
-
-A CRM-style data table component that displays:
-- User email
-- User name (from profiles)
-- Current role(s)
-- Account creation date
-- Role assignment controls
-
-**Features:**
-- Search by email or name
-- Filter by role (All / Admin / Moderator / User / No Role)
-- Assign/remove role buttons with confirmation
-- Visual role badges
-
-### 2. Create New Admin Page: `AdminRoles.tsx`
-
-**Location:** `src/pages/AdminRoles.tsx`
-
-Page wrapper using `AdminLayout` with title "User Role Management"
-
-### 3. Add Route to App.tsx
-
-```
-/admin/roles → AdminRoles
-```
-
-### 4. Update AdminLayout Navigation
-
-Add "User Roles" navigation item in sidebar:
-```typescript
-{ to: "/admin/roles", label: "User Roles", icon: Shield }
-```
-
----
-
-## Technical Details
-
-### Data Fetching Strategy
-
-Since we cannot directly query `auth.users` from the client due to security restrictions, we'll:
-1. Query `profiles` table (linked to auth.users by id)
-2. Left join with `user_roles` to get current roles
-3. Use Supabase client API for role operations
-
-```typescript
-// Fetch users with roles
-const { data: users } = await supabase
-  .from('profiles')
-  .select(`
-    id,
-    full_name,
-    created_at,
-    user_roles (role)
-  `)
-  .order('created_at', { ascending: false });
-```
-
-### Role Assignment Operations
-
-```typescript
-// Assign role
-const assignRole = async (userId: string, role: app_role) => {
-  const { error } = await supabase
-    .from('user_roles')
-    .upsert({ user_id: userId, role }, { onConflict: 'user_id,role' });
-};
-
-// Remove role
-const removeRole = async (userId: string, role: app_role) => {
-  const { error } = await supabase
-    .from('user_roles')
-    .delete()
-    .eq('user_id', userId)
-    .eq('role', role);
-};
-```
-
-### RLS Policy Verification
-
-Current policies allow admins to manage roles:
-- `Admins can manage roles` (ALL) - Using `has_role(auth.uid(), 'admin')`
-- `Admins can view all roles` (SELECT)
-- `Users can view their own roles` (SELECT)
-
----
-
-## UI Components
-
-### User Table Row
-
-```
-┌─────────────────────────────────────────────────────────────────┐
-│ 👤 admin@healingbuds.test                                       │
-│    Admin User                                                   │
-│    Created: Jan 30, 2026                                        │
-│                                                                 │
-│    Roles: [ADMIN ✓]                                             │
-│                                                                 │
-│    [+ Add Role ▼]  [Remove Admin ✕]                             │
-└─────────────────────────────────────────────────────────────────┘
-```
-
-### Filter Tabs
-
-```
-[All (3)] [Admins (1)] [Moderators (0)] [Users (0)] [No Role (2)]
-```
-
-### Role Badges
-
-- Admin: Red badge with Shield icon
-- Moderator: Blue badge with ShieldCheck icon
-- User: Green badge with User icon
-
----
-
-## Files to Create
-
-| File | Purpose |
-|------|---------|
-| `src/components/admin/AdminUserRoles.tsx` | Main role management component |
-| `src/pages/AdminRoles.tsx` | Page wrapper with AdminLayout |
+1. The Dr. Green API returns all prices in **EUR**
+2. The ProductCard correctly converts prices for display using `convertFromEUR()`
+3. Cart items store the **raw EUR price** in `unit_price`
+4. The Checkout page calls `formatPrice()` **without conversion** - just adding the Rand symbol
 
 ## Files to Modify
 
-| File | Changes |
-|------|---------|
-| `src/App.tsx` | Add `/admin/roles` route |
-| `src/layout/AdminLayout.tsx` | Add "User Roles" to navigation |
+### 1. `src/pages/Checkout.tsx`
 
----
+**Changes:**
+- Import `useShop` to access `convertFromEUR` function
+- Apply conversion when displaying individual item prices
+- Apply conversion when displaying the cart total
 
-## Security Considerations
+**Before (line 409):**
+```typescript
+Qty: {item.quantity} × {formatPrice(item.unit_price, countryCode)}
+```
 
-1. **Server-side validation**: All role operations go through Supabase RLS
-2. **Admin-only access**: Component only renders for admins (via AdminLayout)
-3. **Confirmation dialogs**: Role changes require confirmation
-4. **Audit trail**: `created_at` timestamp on role assignments
+**After:**
+```typescript
+Qty: {item.quantity} × {formatPrice(convertFromEUR(item.unit_price), countryCode)}
+```
 
-## Edge Cases
+**Before (line 413):**
+```typescript
+{formatPrice(item.quantity * item.unit_price, countryCode)}
+```
 
-1. **Self-demotion prevention**: Admin cannot remove their own admin role
-2. **Last admin protection**: Cannot remove admin role if it's the only admin
-3. **Empty states**: Handle users with no roles gracefully
-4. **Error handling**: Display toast messages for failures
+**After:**
+```typescript
+{formatPrice(convertFromEUR(item.quantity * item.unit_price), countryCode)}
+```
 
----
+**Before (line 422):**
+```typescript
+<span className="text-primary">{formatPrice(cartTotal, countryCode)}</span>
+```
+
+**After:**
+```typescript
+<span className="text-primary">{formatPrice(cartTotalConverted, countryCode)}</span>
+```
+
+Note: `cartTotalConverted` is already available from `useShop()` and correctly converts the total.
+
+### 2. `src/components/shop/Cart.tsx`
+
+Review and fix the cart drawer component to ensure consistent currency conversion.
+
+**Changes:**
+- Ensure cart item prices display with proper EUR→local currency conversion
+- Use `convertFromEUR()` from ShopContext
+
+## Technical Details
+
+### Conversion Flow (Correct)
+```
+Dr. Green API (EUR) → convertFromEUR(amount) → formatPrice(convertedAmount, countryCode)
+```
+
+### Exchange Rate Reference
+- Current rates are fetched from `exchange-rates` edge function
+- ZAR base: EUR ~0.052 means 1 ZAR ≈ €0.052, or €1 ≈ R19.23
+- So €10.00 should display as approximately **R 192.30**
 
 ## Testing Checklist
 
 After implementation:
-1. Login as admin → navigate to `/admin/roles`
-2. Verify all users are displayed with correct roles
-3. Test assigning "moderator" role to a user without roles
-4. Test removing a role from a user
-5. Verify self-demotion prevention works
-6. Test search functionality
-7. Test filter tabs
+1. Add product to cart from shop page
+2. Navigate to checkout
+3. Verify prices show in ZAR (should be ~19x the EUR amount)
+4. Verify cart drawer also shows correct ZAR prices
+5. Verify total matches sum of items
+6. Test with different products to ensure consistency
+
+## Security Considerations
+
+- No security impact - this is a display-only fix
+- Payment amount (`createPayment`) already uses `getCurrencyForCountry()` to send the correct currency to the API
+- The API will receive the amount in the correct currency
+
+## Affected User Experience
+
+- All South African users will see correct Rand pricing
+- Same fix applies to other non-EUR regions (UK→GBP, Thailand→THB)
