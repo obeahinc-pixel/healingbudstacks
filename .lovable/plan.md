@@ -1,59 +1,43 @@
-# Plan: Add Railway Environment to drgreen-proxy
 
-## Status: ✅ COMPLETED
+# Plan: Fix Quick Login Admin Credentials
 
-## Objective
-Add a third `railway` environment to `drgreen-proxy` to match the configuration in `drgreen-comparison`, enabling switching between all three API environments.
+## Issue Identified
+The quick login dropdown has incorrect admin credentials. The actual admin account in the database is:
+- **Email**: `admin@healingbuds.test`
+- **User ID**: `6fc36e5c-92c5-43d4-a162-3d6385190590`
+- **Role**: `admin`
 
-## Final State
+The dropdown currently tries to use `scott@healingbuds.global` which doesn't exist in the auth system.
 
-| Environment | Status in drgreen-proxy | Status in drgreen-comparison |
-|-------------|-------------------------|------------------------------|
-| production | ✅ Configured | ✅ Configured |
-| staging | ✅ Configured | ✅ Configured |
-| railway | ✅ Configured | ✅ Configured |
+## Fix Required
 
-## Configuration Details
+### File: `src/pages/Auth.tsx`
 
-| Environment | API URL | API Key Source | Private Key Source |
-|-------------|---------|----------------|-------------------|
-| production | `https://api.drgreennft.com/api/v1` | `DRGREEN_API_KEY` | `DRGREEN_PRIVATE_KEY` |
-| staging | `https://stage-api.drgreennft.com/api/v1` | `DRGREEN_STAGING_API_KEY` | `DRGREEN_STAGING_PRIVATE_KEY` |
-| railway | `https://budstack-backend-main-development.up.railway.app/api/v1` | `DRGREEN_STAGING_API_KEY` | `DRGREEN_STAGING_PRIVATE_KEY` |
+Update line 319 to use the correct admin email:
 
-**Note**: Railway uses the same credentials as staging (both are development environments).
+| Current (Wrong) | Correct |
+|-----------------|---------|
+| `scott@healingbuds.global` | `admin@healingbuds.test` |
 
-## Usage
-
-### Switch environment per request:
-```json
-{"action": "get-strains", "countryCode": "ZAF", "env": "production"}
-{"action": "get-strains", "countryCode": "ZAF", "env": "staging"}
-{"action": "get-strains", "countryCode": "ZAF", "env": "railway"}
+```typescript
+<DropdownMenuItem
+  onClick={() => {
+    setEmail("admin@healingbuds.test");  // Changed from scott@healingbuds.global
+    setPassword("Healing2025!");
+  }}
+  className="cursor-pointer"
+>
+  <Shield className="w-4 h-4 mr-2 text-primary" />
+  Admin (Test)
+</DropdownMenuItem>
 ```
 
-### Test all environments:
-```json
-{"action": "test-staging"}
-```
+## Available Accounts Summary
 
-The `test-staging` action now tests all three environments and provides a summary of which endpoints work in each.
+| Email | Role | Status |
+|-------|------|--------|
+| `admin@healingbuds.test` | Admin | ✅ Confirmed |
+| `scott.k1@outlook.com` | Patient | ✅ Confirmed |
 
-## Changes Made
-
-### File: `supabase/functions/drgreen-proxy/index.ts`
-
-1. Added `railway` environment to `ENV_CONFIG`:
-   ```typescript
-   railway: {
-     apiUrl: 'https://budstack-backend-main-development.up.railway.app/api/v1',
-     apiKeyEnv: 'DRGREEN_STAGING_API_KEY',
-     privateKeyEnv: 'DRGREEN_STAGING_PRIVATE_KEY',
-     name: 'Railway (Dev)',
-   },
-   ```
-
-2. Updated `test-staging` action to:
-   - Test all three environments (production, staging, railway)
-   - Test both `/strains` and `/dapp/clients` endpoints per environment
-   - Provide per-environment summary with recommendations
+## Testing
+After this change, clicking "Quick Login (Dev)" → "Admin (Test)" should successfully log in and redirect to `/admin`.
