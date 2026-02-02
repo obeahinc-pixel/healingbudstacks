@@ -7,7 +7,7 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { Badge } from '@/components/ui/badge';
-import { Server, Cloud, Train } from 'lucide-react';
+import { Server, Cloud, Train, FlaskConical } from 'lucide-react';
 
 const environments: { value: ApiEnvironment; label: string; icon: React.ReactNode; color: string }[] = [
   { 
@@ -15,6 +15,12 @@ const environments: { value: ApiEnvironment; label: string; icon: React.ReactNod
     label: 'Production', 
     icon: <Server className="w-4 h-4" />,
     color: 'bg-green-500'
+  },
+  { 
+    value: 'alt-production', 
+    label: 'Alt Production (Test)', 
+    icon: <FlaskConical className="w-4 h-4" />,
+    color: 'bg-blue-500'
   },
   { 
     value: 'staging', 

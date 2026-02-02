@@ -356,6 +356,12 @@ const ENV_CONFIG: Record<string, EnvConfig> = {
     privateKeyEnv: 'DRGREEN_PRIVATE_KEY',
     name: 'Production',
   },
+  'alt-production': {
+    apiUrl: 'https://api.drgreennft.com/api/v1',
+    apiKeyEnv: 'DRGREEN_ALT_API_KEY',
+    privateKeyEnv: 'DRGREEN_ALT_PRIVATE_KEY',
+    name: 'Alt Production (Test)',
+  },
   staging: {
     apiUrl: getStagingApiUrl(),
     apiKeyEnv: 'DRGREEN_STAGING_API_KEY',
