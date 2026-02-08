@@ -1,155 +1,157 @@
 
-# Plan: Enhanced AdminClientCreator with Find & Link Mode
+# Plan: Resolve API Key Permissions for Dr. Green Client Creation
 
-## Context
-Scott (`scott.k1@outlook.com`) and Kayleigh (`kayleigh.sm@gmail.com`) already exist in the Dr. Green API. Rather than creating duplicate records, we need to search for and link these existing clients to the local database.
+## Current Situation
 
-## Current State Analysis
-- The `sync-client-by-email` action in `drgreen-proxy` can search for clients by email
-- The `admin-reregister-client` action creates NEW clients (not what we want for existing records)
-- The `AdminClientCreator` component currently only uses re-registration (POST)
-- No Supabase users exist for Scott/Kayleigh yet (empty auth.users query result)
+All 4 configured API environments (Production, Alt-Production, Staging, Railway) can **read** data (GET strains) but **cannot create clients** (POST /dapp/clients returns 401 Unauthorized).
 
-## Implementation Strategy
+This indicates the API keys are associated with NFTs that have read-only access, not client creation rights.
 
-### Phase 1: Update AdminClientCreator with Correct Emails
+---
 
-Update `PREDEFINED_CLIENTS` array with the real Dr. Green emails:
+## Root Cause
 
-```text
-Scott:
-  - email: scott.k1@outlook.com
-  - firstName: Scott
-  - lastName: K
+According to the Dr. Green DApp API documentation provided:
+- Clients are created **against the primary NFT selected in the dapp**
+- The API key must be linked to an NFT with **client creation permissions**
+- Current keys appear to be "viewer" level, not "operator" level
 
-Kayleigh:
-  - email: kayleigh.sm@gmail.com
-  - firstName: Kayleigh
-  - lastName: SM
-```
+---
 
-### Phase 2: Add Dual-Mode Operation
+## Solution Options
 
-The component will support two modes:
+### Option A: Obtain New API Keys with Write Permissions (Recommended)
 
-1. **Find & Link Mode** (Primary for existing clients)
-   - Calls `sync-client-by-email` action
-   - Searches Dr. Green API for the client
-   - If found: displays client ID, KYC status, admin approval
-   - Can optionally link to a local Supabase user
+**Steps:**
 
-2. **Create Mode** (Fallback for new clients)
-   - Uses existing `admin-reregister-client` action
-   - Creates fresh records under current API key pair
+1. Contact Dr. Green / NFT administrator to obtain API credentials linked to an NFT with full CRUD permissions
 
-### Phase 3: Expose syncClientByEmail in useDrGreenApi Hook
+2. The new credentials should include:
+   - API Key (Base64-encoded public key)
+   - Private Key (for secp256k1 signature generation)
+   - Confirmation that the NFT has client creation rights
 
-Add a new function to the hook:
+3. Update the secrets in Lovable Cloud:
+   - Either replace existing `DRGREEN_API_KEY` and `DRGREEN_PRIVATE_KEY`
+   - Or add new dedicated keys like `DRGREEN_WRITE_API_KEY` and `DRGREEN_WRITE_PRIVATE_KEY`
+
+4. Update the edge function to use the write-enabled keys for client creation
+
+---
+
+### Option B: Fix Staging URL Configuration
+
+Regardless of Option A, the staging environment has a URL bug:
+
+**Current Issue:**
+- `DRGREEN_STAGING_API_URL` contains trailing `/dapp/`
+- Causes double path: `/api/v1/dapp//dapp/clients`
+
+**Fix:**
+- Update `DRGREEN_STAGING_API_URL` secret to: `https://stage-api.drgreennft.com/api/v1`
+- Remove any trailing `/dapp/` from the URL
+
+---
+
+### Option C: Temporary Workaround (Local-Only Verification)
+
+If obtaining new API keys takes time:
+
+1. Continue using local `drgreen_clients` table with verification flags
+2. Admin manually sets `is_kyc_verified: true` and `admin_approval: 'VERIFIED'`
+3. Users can browse/checkout with local verification
+4. Real Dr. Green sync happens later when proper keys are available
+
+This is already partially implemented but prevents real API order placement.
+
+---
+
+## Technical Changes Required
+
+### 1. Environment Configuration Update
+
+Add support for a dedicated "write" environment:
 
 ```typescript
-syncClientByEmail: async (email: string, localUserId?: string) => {
-  return callProxy<{
-    success: boolean;
-    client?: {
-      id: string;
-      email: string;
-      firstName: string;
-      lastName: string;
-      isKYCVerified: boolean;
-      adminApproval: string;
-    };
-    synced?: boolean;
-    message?: string;
-  }>('sync-client-by-email', { email, localUserId });
+// In ENV_CONFIG
+'production-write': {
+  apiUrl: 'https://api.drgreennft.com/api/v1',
+  apiKeyEnv: 'DRGREEN_WRITE_API_KEY',
+  privateKeyEnv: 'DRGREEN_WRITE_PRIVATE_KEY',
+  name: 'Production (Write)',
 }
 ```
 
-### Phase 4: Update UI with Enhanced Actions
+### 2. Action Routing by Permission
 
-For each predefined client, show:
-- **Find & Link** button (uses sync-client-by-email)
-- **Create New** button (uses admin-reregister-client)
-- Status display showing:
-  - Dr. Green Client ID (if found)
-  - KYC Status
-  - Admin Approval Status
-
-## File Changes
-
-| File | Change Type | Description |
-|------|-------------|-------------|
-| `src/components/admin/AdminClientCreator.tsx` | Modify | Update emails, add Find & Link mode, dual-button UI |
-| `src/hooks/useDrGreenApi.ts` | Modify | Add `syncClientByEmail` function to exports |
-
-## Technical Details
-
-### AdminClientCreator.tsx Changes
+Route read operations to read-only keys, write operations to write-enabled keys:
 
 ```typescript
-// Updated predefined clients
-const PREDEFINED_CLIENTS = [
-  {
-    id: 'scott',
-    firstName: 'Scott',
-    lastName: 'K',
-    email: 'scott.k1@outlook.com',  // Real Dr. Green email
-    countryCode: 'ZAF',  // South Africa (default for open countries)
-    // ... shipping details
-  },
-  {
-    id: 'kayleigh',
-    firstName: 'Kayleigh',
-    lastName: 'SM',
-    email: 'kayleigh.sm@gmail.com',  // Real Dr. Green email
-    countryCode: 'ZAF',
-    // ... shipping details
-  },
-];
+// Client creation uses write environment
+case "create-client":
+case "admin-reregister-client":
+case "bootstrap-test-client":
+  envConfig = getWriteEnvironment();
+  break;
 
-// New find & link function
-const findAndLinkClient = async (client) => {
-  const result = await syncClientByEmail(client.email);
-  if (result.data?.success && result.data?.client) {
-    // Client found - show details and sync status
-    setResults(prev => [...prev, {
-      ...result.data.client,
-      success: true,
-      synced: result.data.synced,
-    }]);
-  } else {
-    // Not found or API error - offer to create new
-    toast({ title: 'Not Found', description: result.data?.message });
-  }
-};
+// Read operations use default
+default:
+  envConfig = getEnvironment(requestedEnv);
 ```
 
-### useDrGreenApi.ts Addition
+### 3. Secret Updates Required
 
-Add `syncClientByEmail` to the returned object alongside existing methods.
+Once new credentials are obtained, add these secrets:
 
-## User Flow After Implementation
+| Secret Name | Purpose |
+|-------------|---------|
+| `DRGREEN_WRITE_API_KEY` | API key with client creation rights |
+| `DRGREEN_WRITE_PRIVATE_KEY` | Private key for signing write requests |
 
-1. Navigate to `/admin`
-2. See "Create Dr. Green Clients" section
-3. For Scott and Kayleigh with correct emails:
-   - Click **"Find & Link"** button
-   - System searches Dr. Green API
-   - If found: Shows client ID, status, and "Linked" badge
-   - If not found: Shows error with option to create new
-4. If needed, use "Create New" for fresh registration
+---
 
-## Testing Plan
+## Verification Steps
 
-1. Deploy changes
-2. Navigate to Admin Dashboard
-3. Click "Find & Link" for Scott (`scott.k1@outlook.com`)
-4. Verify the search returns client data (or clear error if not visible)
-5. Repeat for Kayleigh (`kayleigh.sm@gmail.com`)
-6. If clients are found, verify client IDs are displayed
-7. Test "Create New" fallback with a test email
+After obtaining proper credentials:
 
-## Risk Considerations
+1. Test client creation:
+```bash
+POST /drgreen-proxy
+{
+  "action": "bootstrap-test-client",
+  "email": "test@example.com",
+  "firstName": "Test",
+  "lastName": "User",
+  "countryCode": "PT",
+  "environment": "production-write"
+}
+```
 
-- If clients belong to a different NFT/API key pair, the search will return 401
-- In that case, the UI will clearly indicate that the clients cannot be accessed with current credentials
-- Manual intervention via Dr. Green DApp portal would be required to reassign clients
+2. Verify response includes:
+   - `clientId` (Dr. Green UUID)
+   - `kycLink` (verification URL)
+   - `isKYCVerified: false` (initial state)
+
+3. Test with Scott and Kayleigh's actual data
+
+---
+
+## Summary
+
+| Task | Priority | Owner |
+|------|----------|-------|
+| Obtain write-enabled API keys | High | External (Dr. Green team) |
+| Fix staging URL secret | Medium | Can do immediately |
+| Add write environment config | Medium | After keys obtained |
+| Re-register Scott/Kayleigh | High | After keys working |
+
+---
+
+## Immediate Next Step
+
+**You need to obtain API keys that have client creation permissions from your Dr. Green NFT administrator.** The current keys are read-only.
+
+Alternatively, if you have access to the Dr. Green DApp admin portal, you may be able to:
+1. Generate new API keys from an NFT with operator permissions
+2. Download the public/private key pair
+3. Provide them to me to configure as secrets
