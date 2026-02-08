@@ -85,7 +85,7 @@ export function AdminOrderDetail({
 
   if (!order) return null;
 
-  const shippingAddress = order.shipping_address as Record<string, string> | null;
+  const shippingAddress = order.shipping_address as unknown as Record<string, string> | null;
 
   const handleFlagSubmit = () => {
     if (flagReason.trim()) {

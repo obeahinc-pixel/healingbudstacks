@@ -267,7 +267,8 @@ const Checkout = () => {
         attempts++;
       }
 
-      // Save order locally for tracking
+      // Save order locally with complete context snapshot for reliable admin sync
+      const clientCountryCode = drGreenClient.country_code || countryCode || 'PT';
       await saveOrder({
         drgreen_order_id: createdOrderId,
         status: finalStatus,
@@ -279,6 +280,21 @@ const Checkout = () => {
           quantity: item.quantity,
           unit_price: item.unit_price,
         })),
+        // Capture order context at checkout time
+        client_id: drGreenClient.drgreen_client_id,
+        shipping_address: {
+          address1: shippingAddress.address1,
+          address2: shippingAddress.address2 || '',
+          city: shippingAddress.city,
+          state: shippingAddress.state || shippingAddress.city,
+          postalCode: shippingAddress.postalCode,
+          country: shippingAddress.country,
+          countryCode: shippingAddress.countryCode,
+        },
+        customer_email: drGreenClient.email || undefined,
+        customer_name: drGreenClient.full_name || undefined,
+        country_code: clientCountryCode,
+        currency: getCurrencyForCountry(clientCountryCode),
       });
 
       setOrderId(createdOrderId);

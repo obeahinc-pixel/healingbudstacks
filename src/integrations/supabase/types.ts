@@ -184,11 +184,17 @@ export type Database = {
       }
       drgreen_orders: {
         Row: {
+          client_id: string | null
+          country_code: string | null
           created_at: string
+          currency: string | null
+          customer_email: string | null
+          customer_name: string | null
           drgreen_order_id: string
           id: string
           items: Json
           payment_status: string
+          shipping_address: Json | null
           status: string
           sync_error: string | null
           sync_status: string | null
@@ -198,11 +204,17 @@ export type Database = {
           user_id: string
         }
         Insert: {
+          client_id?: string | null
+          country_code?: string | null
           created_at?: string
+          currency?: string | null
+          customer_email?: string | null
+          customer_name?: string | null
           drgreen_order_id: string
           id?: string
           items?: Json
           payment_status?: string
+          shipping_address?: Json | null
           status?: string
           sync_error?: string | null
           sync_status?: string | null
@@ -212,11 +224,17 @@ export type Database = {
           user_id: string
         }
         Update: {
+          client_id?: string | null
+          country_code?: string | null
           created_at?: string
+          currency?: string | null
+          customer_email?: string | null
+          customer_name?: string | null
           drgreen_order_id?: string
           id?: string
           items?: Json
           payment_status?: string
+          shipping_address?: Json | null
           status?: string
           sync_error?: string | null
           sync_status?: string | null
