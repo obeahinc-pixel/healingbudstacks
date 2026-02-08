@@ -105,7 +105,7 @@ const OWNERSHIP_ACTIONS = [
 
 // Public actions that don't require authentication (minimal - only webhooks/health)
 // TEMPORARY: bootstrap-test-client allows unauthenticated client creation for testing
-const PUBLIC_ACTIONS: string[] = ['debug-list-all-clients', 'bootstrap-test-client', 'debug-compare-keys'];
+const PUBLIC_ACTIONS: string[] = ['debug-list-all-clients', 'bootstrap-test-client', 'debug-compare-keys', 'debug-signing-test'];
 
 // Country-gated actions: open countries (ZA, TH) don't require auth, restricted (GB, PT) do
 const COUNTRY_GATED_ACTIONS = [
@@ -889,28 +889,37 @@ async function generatePrivateKeySignature(
 
 
 /**
- * Fallback HMAC-SHA256 signature for legacy compatibility
- * Used when private key import fails (may be a shared secret instead)
+ * HMAC-SHA256 signing - THE CORRECT METHOD for Dr Green API
+ * Matches the working health check approach and WordPress reference implementation.
+ * 
+ * For GET requests: signs the query string (e.g., "orderBy=desc&take=10&page=1")
+ * For POST requests: signs the JSON body string
+ * For empty payloads: signs an empty string ""
+ * 
+ * @param data - The data to sign (query string for GET, JSON body for POST)
+ * @param secretKey - The Base64-encoded private key from secrets
+ * @returns Base64-encoded HMAC-SHA256 signature
  */
-async function generateHmacSignatureFallback(
-  data: string,
-  secretKey: string
-): Promise<string> {
+async function signWithHmac(data: string, secretKey: string): Promise<string> {
   const encoder = new TextEncoder();
+  const secret = (secretKey || '').trim();
   
-  // Try to decode as Base64 first
+  // Decode secret key - try Base64 first, fall back to raw bytes
   let keyBytes: Uint8Array;
-  if (isBase64(secretKey)) {
+  const isBase64Key = /^[A-Za-z0-9+/]+=*$/.test(secret) && secret.length % 4 === 0;
+  
+  if (isBase64Key) {
     try {
-      keyBytes = base64ToBytes(secretKey);
-      logDebug("HMAC fallback: Using Base64-decoded key", { keyLength: keyBytes.length });
+      const binaryString = atob(secret);
+      keyBytes = new Uint8Array(binaryString.length);
+      for (let i = 0; i < binaryString.length; i++) {
+        keyBytes[i] = binaryString.charCodeAt(i);
+      }
     } catch {
-      keyBytes = encoder.encode(secretKey);
-      logDebug("HMAC fallback: Using raw key bytes");
+      keyBytes = encoder.encode(secret);
     }
   } else {
-    keyBytes = encoder.encode(secretKey);
-    logDebug("HMAC fallback: Using raw key bytes", { keyLength: keyBytes.length });
+    keyBytes = encoder.encode(secret);
   }
   
   const cryptoKey = await crypto.subtle.importKey(
@@ -924,40 +933,61 @@ async function generateHmacSignatureFallback(
   const dataBytes = encoder.encode(data);
   const signatureBuffer = await crypto.subtle.sign("HMAC", cryptoKey, dataBytes);
   
-  return bytesToBase64(new Uint8Array(signatureBuffer));
-}
-
-/**
- * Sign payload using private key (as per Dr Green API documentation)
- * This is used for POST requests and singular GET requests
- * 
- * Falls back to HMAC if private key import fails
- */
-async function signPayload(payload: string, secretKey: string): Promise<string> {
-  const signature = await generatePrivateKeySignature(payload, secretKey);
+  // Convert to Base64
+  const signatureBytes = new Uint8Array(signatureBuffer);
+  let binary = '';
+  for (let i = 0; i < signatureBytes.byteLength; i++) {
+    binary += String.fromCharCode(signatureBytes[i]);
+  }
   
-  logDebug("Signature generated", {
+  const signature = btoa(binary);
+  
+  logDebug("HMAC-SHA256 signature generated", {
     signatureLength: signature.length,
-    payloadLength: payload.length,
+    dataLength: data.length,
   });
   
   return signature;
 }
 
 /**
- * Sign query string using private key (as per Dr Green API documentation)
+ * Legacy fallback HMAC-SHA256 signature (kept for backwards compatibility)
+ */
+async function generateHmacSignatureFallback(
+  data: string,
+  secretKey: string
+): Promise<string> {
+  return signWithHmac(data, secretKey);
+}
+
+/**
+ * Sign payload using HMAC-SHA256 (primary method)
+ * Falls back to private key signing only if DRGREEN_USE_HMAC is explicitly set to "false"
+ */
+async function signPayload(payload: string, secretKey: string): Promise<string> {
+  const useHmac = Deno.env.get('DRGREEN_USE_HMAC') !== 'false';
+  
+  if (useHmac) {
+    return signWithHmac(payload, secretKey);
+  }
+  
+  // Legacy: use private key signing (secp256k1/RSA/EC)
+  return generatePrivateKeySignature(payload, secretKey);
+}
+
+/**
+ * Sign query string using HMAC-SHA256
  * This is used for GET list endpoints
  */
 async function signQueryString(queryString: string, secretKey: string): Promise<string> {
-  return generatePrivateKeySignature(queryString, secretKey);
+  return signWithHmac(queryString, secretKey);
 }
 
 /**
  * Generate signature with specific mode (for diagnostics)
- * Mode is now ignored - always uses private key signing
  */
 async function signPayloadWithMode(payload: string, secretKey: string, _useDecoded: boolean): Promise<string> {
-  return generatePrivateKeySignature(payload, secretKey);
+  return signWithHmac(payload, secretKey);
 }
 
 /**
@@ -1053,31 +1083,27 @@ async function drGreenRequestBody(
   }
   
   const payload = body ? JSON.stringify(body) : "";
-  const signature = await signPayload(payload, secretKey);
+  
+  // HMAC-SHA256 signing of the JSON payload (matching health check approach)
+  const signature = await signWithHmac(payload, secretKey);
   
   if (enableDetailedLogging) {
     console.log("[API-DEBUG] Payload length:", payload.length);
     console.log("[API-DEBUG] Payload preview:", payload.slice(0, 150));
+    console.log("[API-DEBUG] Signing method: HMAC-SHA256");
     console.log("[API-DEBUG] Signature length:", signature.length);
     console.log("[API-DEBUG] Signature prefix:", signature.slice(0, 16) + "...");
   }
   
-  // Extract the inner key content if API key is stored as Base64-encoded PEM
-  // The Dr. Green API expects the raw public key Base64, not the full PEM wrapper
-  const encodedApiKey = extractPemBody(apiKey);
-  
+  // Send the raw API key as-is (no PEM stripping)
+  // The Dr. Green API expects the key exactly as stored in the secret
   if (enableDetailedLogging) {
-    console.log("[API-DEBUG] API Key processing:", {
-      originalLength: apiKey.length,
-      originalPrefix: apiKey.slice(0, 16) + "...",
-      extractedLength: encodedApiKey.length,
-      extractedPrefix: encodedApiKey.slice(0, 16) + "...",
-    });
+    console.log("[API-DEBUG] API Key: raw (no extractPemBody), length:", apiKey.length);
   }
   
   const headers: Record<string, string> = {
     "Content-Type": "application/json",
-    "x-auth-apikey": encodedApiKey,
+    "x-auth-apikey": apiKey,
     "x-auth-signature": signature,
   };
   
@@ -1191,34 +1217,27 @@ async function drGreenRequestGet(
   }
   const queryString = params.toString();
   
-  // Per API docs: For GET requests, sign an empty JSON object "{}"
-  // This matches the TypeScript example: getAuthHeaders(payload || {})
-  const emptyPayload = "{}";
-  const signature = await signPayload(emptyPayload, secretKey);
+  // HMAC-SHA256 signing of the QUERY STRING (matching health check approach)
+  // For GET requests, sign the query string parameters, not an empty object
+  const dataToSign = queryString || "";
+  const signature = await signWithHmac(dataToSign, secretKey);
   
   if (enableDetailedLogging) {
-    console.log("[API-DEBUG] Signing empty object: '{}'");
+    console.log("[API-DEBUG] Signing method: HMAC-SHA256 on query string");
+    console.log("[API-DEBUG] Data being signed:", dataToSign);
     console.log("[API-DEBUG] Query string for URL:", queryString);
     console.log("[API-DEBUG] Signature length:", signature.length);
     console.log("[API-DEBUG] Signature prefix:", signature.slice(0, 16) + "...");
   }
   
-  // Extract the inner key content if API key is stored as Base64-encoded PEM
-  // The Dr. Green API expects the raw public key Base64, not the full PEM wrapper
-  const encodedApiKey = extractPemBody(apiKey);
-  
+  // Send the raw API key as-is (no PEM stripping)
   if (enableDetailedLogging) {
-    console.log("[API-DEBUG] API Key processing:", {
-      originalLength: apiKey.length,
-      originalPrefix: apiKey.slice(0, 16) + "...",
-      extractedLength: encodedApiKey.length,
-      extractedPrefix: encodedApiKey.slice(0, 16) + "...",
-    });
+    console.log("[API-DEBUG] API Key: raw (no extractPemBody), length:", apiKey.length);
   }
   
   const headers: Record<string, string> = {
     "Content-Type": "application/json",
-    "x-auth-apikey": encodedApiKey,
+    "x-auth-apikey": apiKey,
     "x-auth-signature": signature,
   };
   
@@ -2190,9 +2209,10 @@ serve(async (req) => {
           throw new Error("Invalid ID format");
         }
         
-        // WordPress signs {"cartId": basketId} but passes strainId as query param
+        // Sign the JSON payload with HMAC-SHA256 (matching health check approach)
         const signPayloadData = { cartId };
-        const signature = await signPayload(JSON.stringify(signPayloadData), Deno.env.get("DRGREEN_PRIVATE_KEY")!);
+        const payloadStr = JSON.stringify(signPayloadData);
+        const signature = await signWithHmac(payloadStr, Deno.env.get("DRGREEN_PRIVATE_KEY")!);
         
         const apiKey = Deno.env.get("DRGREEN_API_KEY")!;
         const apiUrl = `${DRGREEN_API_URL}/dapp/carts/${cartId}?strainId=${strainId}`;
@@ -2209,7 +2229,7 @@ serve(async (req) => {
             "x-auth-apikey": apiKey,
             "x-auth-signature": signature,
           },
-          body: JSON.stringify(signPayloadData),
+          body: payloadStr,
           signal: controller.signal,
         });
         
@@ -2513,7 +2533,7 @@ serve(async (req) => {
         if (searchBy) queryParams.searchBy = searchBy;
         
         // Use query string signing for GET with params (fixes 401)
-        response = await drGreenRequestQuery("/dapp/strains", queryParams);
+        response = await drGreenRequestQuery("/strains", queryParams);
         break;
       }
       
@@ -4137,10 +4157,10 @@ serve(async (req) => {
         const envResults: Record<string, unknown> = {};
         
         for (const [envName, envConfig] of Object.entries(ENV_CONFIG)) {
-          const apiKey = Deno.env.get(envConfig.apiKeyEnv);
-          const privateKey = Deno.env.get(envConfig.privateKeyEnv);
+          const envApiKey = Deno.env.get(envConfig.apiKeyEnv);
+          const envPrivateKey = Deno.env.get(envConfig.privateKeyEnv);
           
-          if (!apiKey || !privateKey) {
+          if (!envApiKey || !envPrivateKey) {
             envResults[envName] = { 
               configured: false, 
               apiKeyEnv: envConfig.apiKeyEnv,
@@ -4151,31 +4171,22 @@ serve(async (req) => {
           
           // Analyze key format
           let apiKeyFormat = 'unknown';
-          let extractedKeyLength = 0;
           let isPem = false;
           
           try {
-            const decoded = base64ToBytes(apiKey);
+            const decoded = base64ToBytes(envApiKey);
             const pemText = new TextDecoder().decode(decoded);
             isPem = pemText.includes('-----BEGIN');
-            
-            if (isPem) {
-              apiKeyFormat = 'base64-encoded-pem';
-              const extracted = extractPemBody(apiKey);
-              extractedKeyLength = extracted.length;
-            } else {
-              apiKeyFormat = 'raw-base64';
-              extractedKeyLength = apiKey.length;
-            }
+            apiKeyFormat = isPem ? 'base64-encoded-pem' : 'raw-base64';
           } catch {
             apiKeyFormat = 'decode-error';
           }
           
-          // Try a simple GET request to test credentials
+          // Try a GET request with HMAC-SHA256 signing (the correct method)
           let testResult = 'untested';
           try {
             const testResp = await drGreenRequestGet(
-              '/dapp/strains',
+              '/strains',
               { countryCode: 'ZAF', take: 1 },
               false,
               envConfig
@@ -4188,20 +4199,98 @@ serve(async (req) => {
           envResults[envName] = {
             configured: true,
             apiKeyEnv: envConfig.apiKeyEnv,
-            apiKeyLength: apiKey.length,
-            apiKeyPrefix: apiKey.slice(0, 12) + '...',
+            apiKeyLength: envApiKey.length,
+            apiKeyPrefix: envApiKey.slice(0, 12) + '...',
             isPem,
             apiKeyFormat,
-            extractedKeyLength,
-            privateKeyLength: privateKey.length,
-            privateKeyPrefix: privateKey.slice(0, 12) + '...',
+            signingMethod: 'HMAC-SHA256',
+            privateKeyLength: envPrivateKey.length,
+            privateKeyPrefix: envPrivateKey.slice(0, 12) + '...',
             testResult,
           };
         }
         
         return new Response(JSON.stringify({
           action: 'debug-compare-keys',
+          signingMethod: 'HMAC-SHA256',
           environments: envResults,
+          timestamp: new Date().toISOString(),
+        }, null, 2), {
+          status: 200,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+      
+      // Diagnostic: test both signing methods side by side
+      case "debug-signing-test": {
+        const testEnv = body?.environment || 'production';
+        const envConfig = ENV_CONFIG[testEnv] || ENV_CONFIG.production;
+        const envApiKey = Deno.env.get(envConfig.apiKeyEnv);
+        const envPrivateKey = Deno.env.get(envConfig.privateKeyEnv);
+        
+        if (!envApiKey || !envPrivateKey) {
+          return new Response(JSON.stringify({
+            error: `Credentials not configured for ${envConfig.name}`,
+          }), { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } });
+        }
+        
+        const queryParams = "orderBy=desc&take=1&page=1";
+        const testUrl = `${envConfig.apiUrl}/strains?${queryParams}`;
+        const results: Record<string, unknown> = {};
+        
+        // Method A: HMAC-SHA256 + raw apiKey + sign query string (health check approach)
+        try {
+          const hmacSig = await signWithHmac(queryParams, envPrivateKey);
+          const hmacResp = await fetch(testUrl, {
+            method: "GET",
+            headers: {
+              "Content-Type": "application/json",
+              "x-auth-apikey": envApiKey,
+              "x-auth-signature": hmacSig,
+            },
+          });
+          const hmacBody = await hmacResp.text();
+          results.methodA_hmac_querystring = {
+            status: hmacResp.status,
+            ok: hmacResp.ok,
+            bodyPreview: hmacBody.slice(0, 200),
+            signingData: queryParams,
+            apiKeyUsed: 'raw',
+          };
+        } catch (e) {
+          results.methodA_hmac_querystring = { error: String(e) };
+        }
+        
+        // Method B: secp256k1 ECDSA + extractPemBody + sign "{}" (old proxy approach)
+        try {
+          const ecdsaSig = await generatePrivateKeySignature("{}", envPrivateKey);
+          const extractedKey = extractPemBody(envApiKey);
+          const ecdsaResp = await fetch(testUrl, {
+            method: "GET",
+            headers: {
+              "Content-Type": "application/json",
+              "x-auth-apikey": extractedKey,
+              "x-auth-signature": ecdsaSig,
+            },
+          });
+          const ecdsaBody = await ecdsaResp.text();
+          results.methodB_ecdsa_empty = {
+            status: ecdsaResp.status,
+            ok: ecdsaResp.ok,
+            bodyPreview: ecdsaBody.slice(0, 200),
+            signingData: '{}',
+            apiKeyUsed: 'extractPemBody',
+          };
+        } catch (e) {
+          results.methodB_ecdsa_empty = { error: String(e) };
+        }
+        
+        return new Response(JSON.stringify({
+          action: 'debug-signing-test',
+          environment: envConfig.name,
+          testUrl,
+          results,
+          recommendation: 'Method A (HMAC-SHA256) is the correct approach per WordPress reference',
           timestamp: new Date().toISOString(),
         }, null, 2), {
           status: 200,
