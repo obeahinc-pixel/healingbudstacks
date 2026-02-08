@@ -16,7 +16,6 @@ serve(async (req) => {
     console.log('[MIGRATE] Starting external client migration...');
 
     // External Supabase credentials (source) - using service role key to bypass RLS
-    const externalUrl = "https://texrwjjwrkvhdfjemnf.supabase.co";
     const externalServiceKey = Deno.env.get('EXTERNAL_SUPABASE_SERVICE_KEY');
     
     if (!externalServiceKey) {
@@ -28,6 +27,31 @@ serve(async (req) => {
         { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 500 }
       );
     }
+
+    // Decode JWT to extract project reference
+    let projectRef: string;
+    try {
+      const parts = externalServiceKey.split('.');
+      if (parts.length !== 3) {
+        throw new Error('Invalid JWT format');
+      }
+      const payload = JSON.parse(atob(parts[1]));
+      projectRef = payload.ref;
+      console.log('[MIGRATE] Extracted project ref from JWT:', projectRef);
+    } catch (e) {
+      console.error('[MIGRATE] Failed to decode JWT:', e);
+      return new Response(
+        JSON.stringify({ 
+          success: false, 
+          error: 'Failed to decode service key JWT',
+          details: e instanceof Error ? e.message : 'Unknown error'
+        }),
+        { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 500 }
+      );
+    }
+
+    const externalUrl = `https://${projectRef}.supabase.co`;
+    console.log('[MIGRATE] External project URL:', externalUrl);
 
     // Current project credentials (destination)
     const currentUrl = Deno.env.get('SUPABASE_URL')!;
