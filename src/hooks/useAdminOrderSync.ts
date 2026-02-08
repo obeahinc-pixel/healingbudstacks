@@ -16,11 +16,25 @@ export type OrderStatus = "PENDING" | "CONFIRMED" | "PROCESSING" | "SHIPPED" | "
 export type PaymentStatus = "PENDING" | "PAID" | "FAILED" | "REFUNDED";
 
 export interface OrderItem {
-  strainId: string;
-  strainName: string;
+  // Support both naming conventions (DB stores snake_case, API expects camelCase)
+  strainId?: string;
+  strain_id?: string;
+  strainName?: string;
+  strain_name?: string;
   quantity: number;
-  unitPrice: number;
-  totalPrice: number;
+  unitPrice?: number;
+  unit_price?: number;
+  totalPrice?: number;
+}
+
+interface ShippingAddress {
+  address1: string;
+  address2?: string;
+  city: string;
+  state?: string;
+  postalCode: string;
+  country: string;
+  countryCode: string;
 }
 
 export interface LocalOrder {
@@ -36,11 +50,13 @@ export interface LocalOrder {
   sync_error: string | null;
   created_at: string;
   updated_at: string;
-  // Joined data
-  customer_email?: string;
-  customer_name?: string;
-  client_id?: string;
-  shipping_address?: Record<string, unknown>;
+  // Order context captured at checkout (for reliable sync)
+  client_id?: string | null;
+  shipping_address?: ShippingAddress | null;
+  customer_email?: string | null;
+  customer_name?: string | null;
+  country_code?: string | null;
+  currency?: string | null;
 }
 
 export interface OrderFilters {
@@ -129,9 +145,22 @@ export function useAdminOrderSync() {
 
     if (error) throw error;
 
-    // Fetch client info separately for each order
+    // Map orders - use order-stored context if available, fallback to client lookup
     const orders: LocalOrder[] = await Promise.all(
       (data || []).map(async (order: any) => {
+        // Prioritize order-stored data (captured at checkout)
+        const hasStoredContext = order.client_id && order.shipping_address;
+        
+        if (hasStoredContext) {
+          // Use order-stored context - no client lookup needed
+          return {
+            ...order,
+            items: order.items || [],
+            shipping_address: order.shipping_address as ShippingAddress | null,
+          };
+        }
+        
+        // Fallback: fetch from client record (for legacy orders without stored context)
         const { data: client } = await supabase
           .from("drgreen_clients")
           .select("email, full_name, drgreen_client_id, shipping_address")
@@ -141,10 +170,10 @@ export function useAdminOrderSync() {
         return {
           ...order,
           items: order.items || [],
-          customer_email: client?.email,
-          customer_name: client?.full_name,
-          client_id: client?.drgreen_client_id,
-          shipping_address: client?.shipping_address,
+          customer_email: order.customer_email || client?.email,
+          customer_name: order.customer_name || client?.full_name,
+          client_id: order.client_id || client?.drgreen_client_id,
+          shipping_address: (order.shipping_address || client?.shipping_address) as ShippingAddress | null,
         };
       })
     );
@@ -199,19 +228,25 @@ export function useAdminOrderSync() {
         throw new Error(orderError?.message || "Order not found");
       }
 
-      // Get client info separately
-      const { data: client, error: clientError } = await supabase
-        .from("drgreen_clients")
-        .select("drgreen_client_id, shipping_address")
-        .eq("user_id", order.user_id)
-        .maybeSingle();
+      // Prioritize order-stored data for reliable sync (captures checkout context)
+      let clientId = order.client_id as string | null;
+      let shippingAddress = order.shipping_address as unknown as ShippingAddress | null;
+      
+      // Fallback to client lookup only if order doesn't have stored context
+      if (!clientId || !shippingAddress) {
+        const { data: client, error: clientError } = await supabase
+          .from("drgreen_clients")
+          .select("drgreen_client_id, shipping_address")
+          .eq("user_id", order.user_id)
+          .maybeSingle();
 
-      if (clientError || !client) {
-        throw new Error(clientError?.message || "Client not found for this order");
+        if (clientError || !client) {
+          throw new Error(clientError?.message || "Client not found for this order");
+        }
+
+        clientId = clientId || client.drgreen_client_id;
+        shippingAddress = shippingAddress || (client.shipping_address as unknown as ShippingAddress | null);
       }
-
-      const clientId = client.drgreen_client_id;
-      const shippingAddress = client.shipping_address as Record<string, unknown> | null;
 
       if (!clientId) {
         throw new Error("Client ID not found for this order");
@@ -221,26 +256,26 @@ export function useAdminOrderSync() {
         throw new Error("Shipping address not found for this order");
       }
 
-      // Format items for Dr. Green API
+      // Format items for Dr. Green API (handle both snake_case from DB and camelCase)
       const orderItems = order.items as unknown as OrderItem[];
       const items = (orderItems || []).map((item) => ({
-        productId: item.strainId,
+        productId: item.strain_id || item.strainId || '',
         quantity: item.quantity,
-        price: item.unitPrice,
+        price: item.unit_price || item.unitPrice || 0,
       }));
 
-      // Create order in Dr. Green API
+      // Create order in Dr. Green API using order-stored address
       const result = await createOrder({
         clientId,
         items,
-        shippingAddress: shippingAddress as {
-          address1?: string;
-          address2?: string;
-          city?: string;
-          state?: string;
-          postalCode?: string;
-          country?: string;
-          countryCode?: string;
+        shippingAddress: {
+          address1: shippingAddress.address1,
+          address2: shippingAddress.address2 || '',
+          city: shippingAddress.city,
+          state: shippingAddress.state || shippingAddress.city,
+          postalCode: shippingAddress.postalCode,
+          country: shippingAddress.country,
+          countryCode: shippingAddress.countryCode,
         },
       });
 

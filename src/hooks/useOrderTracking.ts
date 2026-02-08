@@ -10,6 +10,16 @@ interface OrderItem {
   unit_price: number;
 }
 
+interface ShippingAddressSnapshot {
+  address1: string;
+  address2?: string;
+  city: string;
+  state?: string;
+  postalCode: string;
+  country: string;
+  countryCode: string;
+}
+
 interface LocalOrder {
   id: string;
   user_id: string;
@@ -20,6 +30,28 @@ interface LocalOrder {
   items: OrderItem[];
   created_at: string;
   updated_at: string;
+  // Order context captured at checkout
+  client_id?: string | null;
+  shipping_address?: ShippingAddressSnapshot | null;
+  customer_email?: string | null;
+  customer_name?: string | null;
+  country_code?: string | null;
+  currency?: string | null;
+}
+
+export interface SaveOrderParams {
+  drgreen_order_id: string;
+  status: string;
+  payment_status: string;
+  total_amount: number;
+  items: OrderItem[];
+  // Order context
+  client_id?: string;
+  shipping_address?: ShippingAddressSnapshot;
+  customer_email?: string;
+  customer_name?: string;
+  country_code?: string;
+  currency?: string;
 }
 
 export function useOrderTracking() {
@@ -47,7 +79,8 @@ export function useOrderTracking() {
     } else {
       setOrders((data || []).map(order => ({
         ...order,
-        items: (order.items as unknown as OrderItem[]) || []
+        items: (order.items as unknown as OrderItem[]) || [],
+        shipping_address: order.shipping_address as unknown as ShippingAddressSnapshot | null,
       })));
     }
     setIsLoading(false);
@@ -150,13 +183,8 @@ export function useOrderTracking() {
   };
 
   // Save order locally (called after checkout)
-  const saveOrder = async (orderData: {
-    drgreen_order_id: string;
-    status: string;
-    payment_status: string;
-    total_amount: number;
-    items: OrderItem[];
-  }) => {
+  // Now captures complete order context including shipping address snapshot
+  const saveOrder = async (orderData: SaveOrderParams) => {
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) return null;
 
@@ -169,6 +197,13 @@ export function useOrderTracking() {
         payment_status: orderData.payment_status,
         total_amount: orderData.total_amount,
         items: JSON.parse(JSON.stringify(orderData.items)),
+        // Order context captured at checkout time
+        client_id: orderData.client_id,
+        shipping_address: orderData.shipping_address ? JSON.parse(JSON.stringify(orderData.shipping_address)) : null,
+        customer_email: orderData.customer_email,
+        customer_name: orderData.customer_name,
+        country_code: orderData.country_code,
+        currency: orderData.currency,
       }])
       .select()
       .single();
