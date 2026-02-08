@@ -1,91 +1,135 @@
 
 
-# Create API Knowledge and Infrastructure Documentation
+# Clean Up: Remove Test Data, Harden for Production, Align with Dr. Green as Source of Truth
 
-## Overview
-Create two new documentation files that capture the critical findings from the Dr. Green API integration debugging process. These files serve as a permanent knowledge base for this project and as transferable reference material for future projects involving similar API integrations.
+## Current State
 
-## Files to Create
+All 13 local database tables are **empty** (0 rows). No auth users exist. The Dr. Green API is online and healthy. This is actually a clean starting point -- there is no test data to purge from the database itself.
 
-### File 1: `docs/DRGREEN-API-SIGNING-KNOWLEDGE.md`
-A focused technical document capturing the authentication and signing mechanics that were discovered, debugged, and resolved. This is the "lessons learned" document that prevents the same debugging process from happening again.
+However, **test infrastructure exists in the codebase** that must be removed before production use. Additionally, several local tables are redundant given that Dr. Green is the source of truth.
 
-**Contents will include:**
-- The correct signing method: HMAC-SHA256 (not secp256k1 ECDSA)
-- What to sign for GET requests: the query string (e.g., `orderBy=desc&take=1&page=1`)
-- What to sign for POST requests: the JSON body string
-- API key header format: send raw Base64 key, do not strip PEM headers
-- Secret key decoding: Base64-decode to raw bytes before use as HMAC key
-- The `DRGREEN_USE_HMAC` environment variable toggle for rollback
-- Reference implementation in both Deno (Web Crypto API) and Node.js
-- Common pitfalls and the root cause analysis of the 401 errors
-- Diagnostic endpoints available for future testing
+---
 
-### File 2: `.agent/knowledge/API_INFRASTRUCTURE.md`
-A broader infrastructure knowledge document that captures architectural decisions, multi-environment configuration, credential management, and operational patterns. Designed to be reusable across future projects.
+## Part 1: Remove Test Infrastructure (Security Critical)
 
-**Contents will include:**
-- Proxy architecture pattern (Frontend -> Edge Function -> External API)
-- Multi-environment credential management (5 environments with distinct key pairs)
-- NFT-scoped access control and its implications for client management
-- Secret naming conventions and what each credential pair is used for
-- Health check pattern for API connectivity monitoring
-- Retry configuration with exponential backoff
-- Security patterns (never expose keys client-side, sanitized logging)
-- The `extractPemBody` trap and why raw keys should be used
-- Write vs read credential separation
-- Key rotation and migration procedures
+### 1.1 Delete `seed-test-users` Edge Function
+- File: `supabase/functions/seed-test-users/index.ts`
+- **Problem**: Contains hardcoded credentials for real email addresses (healingbudsglobal@gmail.com, scott.k1@outlook.com, kayleigh.sm@gmail.com) with the password `H34l1ng@buds2025`
+- **Action**: Delete the entire function and remove its deployment
+- **Risk**: This function can be called by anyone with the function URL, creating accounts with known passwords
 
-### File 3: Update existing `docs/DRGREEN-API-INTEGRATION.md`
-Update the existing integration guide to correct the outdated signing documentation that still references secp256k1 ECDSA. This prevents future developers from reimplementing the wrong approach.
+### 1.2 Remove `DevQuickLogin` Component
+- File: `src/components/DevQuickLogin.tsx`
+- **Problem**: Displays the same hardcoded credentials on the login page. Exposes passwords in the browser DOM
+- **Action**: Delete the component file and remove its import/usage from `src/pages/Auth.tsx` (lines 19, 502-506)
 
-**Specific corrections:**
-- Update the architecture diagram to say "HMAC-SHA256" instead of "secp256k1 + SHA-256"
-- Update the "Signature Generation" code example to show HMAC-SHA256
-- Update the Troubleshooting section to reference the correct signing method
-- Add version history entry for this fix
-- Add cross-reference to the new signing knowledge document
+### 1.3 Remove Mock Mode System
+- File: `src/lib/mockMode.ts`
+- **Problem**: Allows bypassing the real Dr. Green API entirely via localStorage toggle. In a regulated medical platform, this could allow unauthenticated access to checkout flows
+- **Action**: Delete the file and remove all imports in `src/components/shop/ClientOnboarding.tsx`
 
-## Technical Details
+### 1.4 Clean Debug Actions from Proxy
+- File: `supabase/functions/drgreen-proxy/index.ts`
+- **Problem**: `PUBLIC_ACTIONS` array (line 108) includes `debug-list-all-clients`, `bootstrap-test-client`, `debug-compare-keys`, `debug-signing-test` -- these allow unauthenticated access to sensitive operations
+- **Action**: Remove `debug-list-all-clients` and `bootstrap-test-client` from `PUBLIC_ACTIONS`. Keep `debug-compare-keys` and `debug-signing-test` but move them to `ADMIN_ACTIONS` so they require admin authentication
 
-### File locations
-- `docs/DRGREEN-API-SIGNING-KNOWLEDGE.md` (new)
-- `.agent/knowledge/API_INFRASTRUCTURE.md` (new)
-- `docs/DRGREEN-API-INTEGRATION.md` (update lines 31, 56-79, 748-753, 766-771)
+---
 
-### No code changes required
-These are documentation-only changes. No edge functions, components, or configuration files will be modified.
+## Part 2: Database Table Audit -- What to Keep vs. Remove
 
-### Correct Signing Reference (to be documented)
+### Tables to KEEP (serve a unique local purpose)
 
-**Deno / Web Crypto API (edge functions):**
+| Table | Purpose | Why Local |
+|-------|---------|-----------|
+| `profiles` | User display name, avatar, preferences | Auth-linked metadata. Not in Dr. Green |
+| `user_roles` | Admin/moderator role assignments | Security RBAC. Must be local for RLS |
+| `drgreen_clients` | Maps Supabase user_id to Dr. Green client_id | Bridge table between auth systems. Caches KYC/approval status for fast eligibility checks without API calls |
+| `drgreen_cart` | Shopping cart items per user | Session-specific, user-bound. Dr. Green cart API is NFT-scoped and may not match |
+| `drgreen_orders` | Order records with sync status | Local-first pattern: orders are created locally, then synced to Dr. Green. Tracks sync_status |
+| `prescription_documents` | Uploaded prescription files | File storage metadata. Not in Dr. Green |
+| `dosage_logs` | Patient self-tracking | Patient-only feature. Not in Dr. Green |
+| `kyc_journey_logs` | Audit trail of KYC steps | Compliance audit trail |
+| `launch_interest` | Pre-launch signups | Marketing data, not in Dr. Green |
+| `articles` | Blog/news content | CMS content, not in Dr. Green |
+| `generated_product_images` | AI-generated jar images | Local asset management |
+| `strain_knowledge` | Scraped dispensary data for enrichment | Supplementary data not in Dr. Green |
+
+### Table to RE-EVALUATE: `strains`
+
+| Column | Source | Verdict |
+|--------|--------|---------|
+| `name`, `description`, `type` | Dr. Green API | Redundant -- fetched live |
+| `thc_content`, `cbd_content`, `cbg_content` | Dr. Green API | Redundant -- fetched live |
+| `retail_price`, `availability`, `stock` | Dr. Green API | Redundant -- fetched live |
+| `image_url`, `client_url` | Dr. Green API | Redundant -- fetched live |
+| `feelings`, `flavors`, `helps_with` | Dr. Green API | Redundant -- fetched live |
+| `sku`, `brand_name`, `is_archived` | Dr. Green API | Redundant -- fetched live |
+
+**Current behavior**: `useProducts.ts` already fetches strains **directly from the Dr. Green API** via the proxy. It does NOT read from the local `strains` table. The `sync-strains` function exists to populate the local table, but nothing reads from it in the main shop flow.
+
+**Recommendation**: Keep the `strains` table as an **offline cache / admin reference** but do NOT rely on it for the shop. The current live-fetch approach is correct. The `sync-strains` function can be used periodically for admin dashboards or search indexing.
+
+---
+
+## Part 3: User Account Strategy
+
+### Current Approach (Problematic)
+The `seed-test-users` function creates accounts with hardcoded passwords. This is inappropriate for a regulated platform.
+
+### Correct Approach
+1. **Admin account**: Create manually through the auth system with a strong unique password (not hardcoded in code)
+2. **Real users** (Scott K, Kayleigh SM): They should sign up through the normal registration flow. On login, the `ShopContext` auto-discovery (`linkClientFromDrGreenByAuthEmail`) will automatically find and link their existing Dr. Green client records
+3. **Auto-sync on login**: The existing `get-client-by-auth-email` proxy action searches Dr. Green by the user's auth email and creates the local `drgreen_clients` mapping. This is already implemented and working
+
+### Post-Cleanup User Flow
 ```text
-1. Base64-decode the secret key to raw bytes
-2. Import as HMAC key: crypto.subtle.importKey("raw", keyBytes, {name: "HMAC", hash: "SHA-256"})
-3. Sign the data: crypto.subtle.sign("HMAC", cryptoKey, encoder.encode(dataToSign))
-4. Base64-encode the resulting signature
-5. Send raw API key in x-auth-apikey header (no PEM stripping)
+1. User signs up at /auth (email + password)
+2. Email confirmation sent
+3. User logs in
+4. ShopContext.fetchClient() runs
+5. No local drgreen_clients record found
+6. linkClientFromDrGreenByAuthEmail() calls proxy
+7. Proxy searches Dr. Green API by email
+8. If found: creates local mapping with KYC status
+9. If not found: user is directed to /shop/register for onboarding
 ```
 
-**Node.js (WordPress reference):**
-```text
-1. Create HMAC: crypto.createHmac('sha256', Buffer.from(secretKey, 'base64'))
-2. Update with data: hmac.update(payload)
-3. Digest as Base64: hmac.digest('base64')
-4. Send raw API key in x-auth-apikey header
-```
+---
 
-**What to sign per HTTP method:**
-- GET: The query string (e.g., "orderBy=desc&take=10&page=1")
-- POST/PATCH/DELETE: The JSON body string (JSON.stringify(body))
-- No body/params: Empty string ""
+## Part 4: Implementation Steps
 
-### Key Findings to Document
+### Step 1: Delete test infrastructure files
+- Delete `supabase/functions/seed-test-users/index.ts`
+- Delete `src/components/DevQuickLogin.tsx`
+- Delete `src/lib/mockMode.ts`
 
-| Finding | Wrong Approach | Correct Approach |
-|---------|---------------|-----------------|
-| Signing algorithm | secp256k1 ECDSA (asymmetric) | HMAC-SHA256 (symmetric) |
-| GET payload to sign | Empty JSON object `"{}"` | Query string parameters |
-| API key header | Stripped via extractPemBody() | Raw Base64 as stored |
-| Secret key usage | Parse as PKCS#8, extract 32-byte EC key | Base64-decode to raw bytes for HMAC |
+### Step 2: Clean Auth.tsx
+- Remove `DevQuickLogin` import and usage from `src/pages/Auth.tsx`
+
+### Step 3: Clean ClientOnboarding.tsx
+- Remove all `mockMode` imports and conditional logic from `src/components/shop/ClientOnboarding.tsx`
+
+### Step 4: Harden proxy public actions
+- Update `PUBLIC_ACTIONS` in `supabase/functions/drgreen-proxy/index.ts` to remove debug endpoints that expose client data without authentication
+
+### Step 5: Deploy and verify
+- Deploy updated edge functions
+- Verify the auth page works without DevQuickLogin
+- Verify the shop loads strains from the live API
+- Verify the registration flow works without mock mode
+
+---
+
+## Summary
+
+| Action | Type | Risk |
+|--------|------|------|
+| Delete seed-test-users | Security fix | Low -- database is already empty |
+| Delete DevQuickLogin | Security fix | Low -- only removes a dev shortcut |
+| Delete mockMode | Compliance fix | Medium -- must verify ClientOnboarding works without it |
+| Harden PUBLIC_ACTIONS | Security fix | Low -- moves debug tools behind auth |
+| Keep all 13 tables | Architecture | None -- all serve distinct purposes |
+| strains table as cache only | Architecture | None -- shop already uses live API |
+
+No database schema changes are required. No data migration is needed (all tables are empty). The Dr. Green API is the authoritative source for clients, strains, orders, and payments. Local tables serve as auth bridges, caches, audit logs, and user-specific features.
 
