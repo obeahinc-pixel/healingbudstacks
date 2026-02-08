@@ -1,124 +1,116 @@
-## Visual Edits Plan
 
-### Summary of Required Changes
 
-Based on the previous conversation, the following visual edits were requested but not yet completed:
+## Re-Register Scott and Kayliegh with Current Dr. Green API Key
+
+### Problem
+
+Scott (`scott.k1@outlook.com`) and Kayliegh (`kayliegh.sm@gmail.com`) are genuine clients whose Dr. Green records were created under a **different API key pair**. The current API key pair cannot access their records (causing 401 errors). They need to be re-registered against the **current** API key by sending the full client creation payload to `POST /dapp/clients` again.
+
+### Current State
+
+| User | Email | Old Dr. Green ID | Country | Shipping Data |
+|------|-------|-------------------|---------|---------------|
+| Kayliegh | kayliegh.sm@gmail.com | 47542db8-... | ZA | 1937 Prospect Street, Pretoria, 0036 |
+| Scott | scott.k1@outlook.com | dfd81e64-... | ZA | 123 Sandton Drive, Sandton, 2196 |
+
+Both have `is_kyc_verified: true` and `admin_approval: VERIFIED` locally, but these records are stale/orphaned under the old key pair.
+
+### Solution: Two-Phase Re-Registration
 
 ---
 
-## 1. Remove Quick Login (Dev) Dropdown from Auth Page
+#### Phase 1: Delete old local records (database)
 
-**File:** `src/pages/Auth.tsx`
+Run a SQL migration to delete the stale `drgreen_clients` records for both users. This clears the local mapping so the system knows they need to re-register.
 
-**Current State (lines 300-340):**
-The "Quick Login (Dev)" dropdown with Admin and Kayliegh options is still present.
-
-**Action:** Remove the entire dropdown block:
-
-```tsx
-// DELETE this entire block (lines 300-340):
-{isLogin && !isForgotPassword && (
-  <div className="px-8 pt-4">
-    <DropdownMenu>
-      {/* ... entire dropdown ... */}
-    </DropdownMenu>
-  </div>
-)}
+```sql
+DELETE FROM drgreen_clients 
+WHERE email IN ('scott.k1@outlook.com', 'kayliegh.sm@gmail.com');
 ```
 
----
-
-## 2. Rename "Cultivar" to "Strains" Globally
-
-Found **233 matches in 10 files**. Changes required:
-
-| File                                        | Changes                                                              |
-| ------------------------------------------- | -------------------------------------------------------------------- |
-| `src/App.tsx`                               | Rename route `/shop/cultivar/:cultivarId` → `/shop/strain/:strainId` |
-| `src/pages/CultivarDetail.tsx`              | Rename file to `StrainDetail.tsx`, update component name             |
-| `src/components/shop/CultivarQuickView.tsx` | Rename to `StrainQuickView.tsx`, update component/props              |
-| `src/components/shop/ProductCard.tsx`       | Update navigation path                                               |
-| `src/components/shop/ProductGrid.tsx`       | Update import and component usage                                    |
-| `src/i18n/locales/en/shop.json`             | Replace "cultivars" → "strains"                                      |
-| `src/i18n/locales/pt/shop.json`             | Replace "cultivares" → "estirpes" (strains in Portuguese)            |
-| `src/pages/Shop.tsx`                        | Update SEO text                                                      |
+Their `auth.users` and `profiles` records remain untouched -- they can still log in.
 
 ---
 
-## 3. Update CTAs for Verified Registered Clients
+#### Phase 2: Admin-Triggered Re-Registration (New Edge Function Feature)
 
-**File:** `src/pages/Index.tsx`
+Instead of making Scott and Kayliegh fill out the entire onboarding form again, create an admin action that re-sends their existing data as a client creation payload to the Dr. Green API under the current key pair.
 
-**Current State (lines 124-131):**
-The primary CTA always shows "Check Eligibility" for all users.
+**New action: `admin-reregister-client`** in `supabase/functions/drgreen-proxy/index.ts`
 
-**Required Change:** For verified users (`isEligible === true`), show "Browse Strains" instead:
+This action will:
+1. Accept an email address from the admin
+2. Look up the user's stored profile data (name, shipping address from the JSONB column backup)
+3. Build a minimal but valid client creation payload using existing data
+4. Call `POST /dapp/clients` with the current API credentials
+5. Store the **new** `drgreen_client_id` and `kyc_link` in `drgreen_clients`
+6. Return the result to the admin
 
-```tsx
-// Hero CTA (around line 124)
-{isEligible ? (
-  <Button
-    size="lg"
-    className="text-lg px-8 py-6 bg-highlight hover:bg-highlight/90 text-highlight-foreground shadow-lg"
-    onClick={() => navigate('/shop')}
-  >
-    Browse Strains
-    <ArrowRight className="ml-2 w-5 h-5" />
-  </Button>
-) : (
-  <Button
-    size="lg"
-    className="text-lg px-8 py-6 bg-highlight hover:bg-highlight/90 text-highlight-foreground shadow-lg"
-    onClick={() => navigate('/eligibility')}
-  >
-    Check Eligibility
-    <ArrowRight className="ml-2 w-5 h-5" />
-  </Button>
-)}
+**Why this approach?**
+- Scott and Kayliegh are real clients -- their personal details are already known
+- Re-filling a 5-step medical questionnaire is unnecessary friction
+- The admin can trigger this server-side with minimal medical defaults
+- KYC will need to be completed again via the new KYC link
+
+---
+
+#### Phase 3: Admin UI Button
+
+Add a "Re-Register with Current API Key" button to the Admin Dashboard that:
+1. Shows a confirmation dialog with the client's email
+2. Calls the `admin-reregister-client` action
+3. Displays the new client ID and KYC link on success
+4. Updates the local UI state
+
+---
+
+### Technical Details
+
+**Files to modify:**
+
+| File | Change |
+|------|--------|
+| Database migration | DELETE stale records for both users |
+| `supabase/functions/drgreen-proxy/index.ts` | Add `admin-reregister-client` to ADMIN_ACTIONS and implement handler |
+| `src/components/admin/AdminClientManager.tsx` | Add "Re-Register" button with confirmation dialog |
+| `src/hooks/useDrGreenApi.ts` | Add `reregisterClient(email)` method |
+
+**Edge function handler logic:**
+
+```
+case "admin-reregister-client":
+  1. Require admin auth
+  2. Accept { email, firstName, lastName, countryCode, shippingAddress }
+  3. Build payload with:
+     - Personal details from input
+     - Shipping address from input (or defaults)
+     - Minimal medical record defaults (all false/none)
+  4. Call POST /dapp/clients with current API credentials
+  5. Parse response for clientId and kycLink
+  6. Upsert into drgreen_clients with new IDs
+  7. Return { success, clientId, kycLink }
 ```
 
-**Also update the "Get Started" section (lines 373-381):**
+**Payload structure** (matching Dr. Green API spec):
 
-```tsx
-// Change for verified users
-{isEligible ? (
-  <Button onClick={() => navigate('/shop')}>
-    Browse Our Strains
-    <ArrowRight className="ml-2 w-5 h-5" />
-  </Button>
-) : (
-  <Button onClick={() => navigate('/eligibility')}>
-    Start Medical Assessment
-    <ArrowRight className="ml-2 w-5 h-5" />
-  </Button>
-)}
-```
+The payload will use the existing data we have (name, email, shipping address) and set medical history fields to safe defaults. This creates a valid client record under the current API key. The actual medical data was already submitted to Dr. Green previously -- this is just re-establishing the API-key binding.
 
 ---
 
-## Files to Modify
+### Post-Implementation Flow
 
-| File                                        | Change                                      |
-| ------------------------------------------- | ------------------------------------------- |
-| `src/pages/Auth.tsx`                        | Remove Quick Login dropdown (lines 300-340) |
-| `src/pages/Index.tsx`                       | Dynamic CTAs based on eligibility           |
-| `src/App.tsx`                               | Update route path from cultivar to strain   |
-| `src/pages/CultivarDetail.tsx`              | Rename to `StrainDetail.tsx`                |
-| `src/components/shop/CultivarQuickView.tsx` | Rename to `StrainQuickView.tsx`             |
-| `src/components/shop/ProductCard.tsx`       | Update navigation path                      |
-| `src/components/shop/ProductGrid.tsx`       | Update imports                              |
-| `src/i18n/locales/en/shop.json`             | Replace cultivar terminology                |
-| `src/i18n/locales/pt/shop.json`             | Replace cultivar terminology                |
-| `src/pages/Shop.tsx`                        | Update SEO/meta text                        |
+1. Admin logs in and navigates to Client Management
+2. Admin clicks "Re-Register" for Scott or Kayliegh
+3. System sends client creation payload to Dr. Green API
+4. New `drgreen_client_id` is stored locally
+5. Scott/Kayliegh receive new KYC link
+6. They complete KYC verification
+7. Once verified, they can shop and place orders under the current API key
 
----
+### Risk Assessment
 
-## Testing Steps
+- **Low risk**: Only affects two specific users
+- **No data loss**: Auth and profile records preserved
+- **Reversible**: If API call fails, no records are changed
+- **KYC required**: Users must re-verify identity (compliance maintained)
 
-After implementation:
-
-1. Verify Auth page no longer shows Quick Login dropdown
-2. Log in as Kayliegh (verified patient) and confirm homepage shows "Browse Strains"
-3. Log out and confirm homepage shows "Check Eligibility"
-4. Navigate to `/shop` and click a product → verify URL is `/shop/strain/{id}`
-5. Search for "cultivar" in codebase → should return 0 results
