@@ -1,116 +1,155 @@
 
+# Plan: Enhanced AdminClientCreator with Find & Link Mode
 
-# Re-Register Scott & Kayleigh in Dr. Green API
+## Context
+Scott (`scott.k1@outlook.com`) and Kayleigh (`kayleigh.sm@gmail.com`) already exist in the Dr. Green API. Rather than creating duplicate records, we need to search for and link these existing clients to the local database.
 
 ## Current State Analysis
+- The `sync-client-by-email` action in `drgreen-proxy` can search for clients by email
+- The `admin-reregister-client` action creates NEW clients (not what we want for existing records)
+- The `AdminClientCreator` component currently only uses re-registration (POST)
+- No Supabase users exist for Scott/Kayleigh yet (empty auth.users query result)
 
-Based on the codebase exploration:
+## Implementation Strategy
 
-1. **Admin Client Manager exists** (`src/components/admin/AdminClientManager.tsx`)
-   - Has `handleReregister()` function that calls `reregisterClient()`
-   - Shows clients fetched from Dr. Green API with filter tabs
+### Phase 1: Update AdminClientCreator with Correct Emails
 
-2. **Re-registration endpoint exists** (`admin-reregister-client` action in drgreen-proxy)
-   - Creates new client record in Dr. Green API under current API key pair
-   - Generates new KYC link
-   - Updates local `drgreen_clients` table with new `drgreen_client_id`
-
-3. **Local database is empty**
-   - `drgreen_clients` table: 0 records
-   - `drgreen_orders` table: 0 records
-
-## The Problem
-
-Scott and Kayleigh's client records exist in the Dr. Green API (created under a previous API key pair), but:
-- Their records are NOT linked to the current API credentials
-- Orders created for them fail with 401 errors
-- They need to be re-registered under the current API key
-
-## Solution: Admin Dashboard Re-Registration
-
-### Step 1: Access Admin Client Manager
-
-Navigate to `/admin` and use the Client Management section to:
-1. View all clients from the Dr. Green API
-2. Find Scott and Kayleigh by searching their email addresses
-
-### Step 2: Re-Register Each Client
-
-For each client (Scott and Kayleigh):
-1. Click the "Re-register" button (KeyRound icon) on their row
-2. Confirm the re-registration dialog
-3. The system will:
-   - Call Dr. Green API `/dapp/clients` POST to create a new client
-   - Store the new `drgreen_client_id` in local database
-   - Generate a new KYC verification link
-   - Reset their status to `PENDING`
-
-### Step 3: Complete KYC Again
-
-After re-registration, the clients will need to:
-1. Click the new KYC link (copied to clipboard automatically)
-2. Complete identity verification again
-3. Wait for admin approval in Dr. Green DApp portal
-
----
-
-## Technical Implementation
-
-The re-registration flow is already implemented. Here's how it works:
+Update `PREDEFINED_CLIENTS` array with the real Dr. Green emails:
 
 ```text
-┌─────────────────────────────────────────────────────────────┐
-│  Admin Dashboard → Client Management                         │
-└─────────────────────────────────────────────────────────────┘
-                              │
-                              ▼
-┌─────────────────────────────────────────────────────────────┐
-│  1. Admin clicks "Re-register" on client row                │
-│     → handleReregister(client)                              │
-└─────────────────────────────────────────────────────────────┘
-                              │
-                              ▼
-┌─────────────────────────────────────────────────────────────┐
-│  2. useDrGreenApi.reregisterClient() called                 │
-│     Payload: { email, firstName, lastName, countryCode }    │
-└─────────────────────────────────────────────────────────────┘
-                              │
-                              ▼
-┌─────────────────────────────────────────────────────────────┐
-│  3. drgreen-proxy → admin-reregister-client action          │
-│     - POST /dapp/clients with minimal medical record        │
-│     - Uses current API key pair for signing                 │
-└─────────────────────────────────────────────────────────────┘
-                              │
-                              ▼
-┌─────────────────────────────────────────────────────────────┐
-│  4. Success Response:                                       │
-│     - New clientId returned                                 │
-│     - New kycLink generated                                 │
-│     - Local drgreen_clients record updated                  │
-└─────────────────────────────────────────────────────────────┘
+Scott:
+  - email: scott.k1@outlook.com
+  - firstName: Scott
+  - lastName: K
+
+Kayleigh:
+  - email: kayleigh.sm@gmail.com
+  - firstName: Kayleigh
+  - lastName: SM
 ```
 
----
+### Phase 2: Add Dual-Mode Operation
 
-## Action Items
+The component will support two modes:
 
-1. **Go to Admin Dashboard** (`/admin`)
-2. **Find the Client Management section**
-3. **Search for Scott** (by email) → Click re-register button
-4. **Search for Kayleigh** (by email) → Click re-register button
-5. **Send new KYC links** to each user
-6. **Approve in Dr. Green DApp** after KYC completion
+1. **Find & Link Mode** (Primary for existing clients)
+   - Calls `sync-client-by-email` action
+   - Searches Dr. Green API for the client
+   - If found: displays client ID, KYC status, admin approval
+   - Can optionally link to a local Supabase user
 
----
+2. **Create Mode** (Fallback for new clients)
+   - Uses existing `admin-reregister-client` action
+   - Creates fresh records under current API key pair
 
-## Files Involved (No Changes Needed)
+### Phase 3: Expose syncClientByEmail in useDrGreenApi Hook
 
-| File | Purpose |
-|------|---------|
-| `src/components/admin/AdminClientManager.tsx` | UI for re-registration |
-| `src/hooks/useDrGreenApi.ts` | `reregisterClient()` method |
-| `supabase/functions/drgreen-proxy/index.ts` | `admin-reregister-client` action |
+Add a new function to the hook:
 
-The implementation is complete - you just need to use the admin dashboard to trigger re-registration for Scott and Kayleigh.
+```typescript
+syncClientByEmail: async (email: string, localUserId?: string) => {
+  return callProxy<{
+    success: boolean;
+    client?: {
+      id: string;
+      email: string;
+      firstName: string;
+      lastName: string;
+      isKYCVerified: boolean;
+      adminApproval: string;
+    };
+    synced?: boolean;
+    message?: string;
+  }>('sync-client-by-email', { email, localUserId });
+}
+```
 
+### Phase 4: Update UI with Enhanced Actions
+
+For each predefined client, show:
+- **Find & Link** button (uses sync-client-by-email)
+- **Create New** button (uses admin-reregister-client)
+- Status display showing:
+  - Dr. Green Client ID (if found)
+  - KYC Status
+  - Admin Approval Status
+
+## File Changes
+
+| File | Change Type | Description |
+|------|-------------|-------------|
+| `src/components/admin/AdminClientCreator.tsx` | Modify | Update emails, add Find & Link mode, dual-button UI |
+| `src/hooks/useDrGreenApi.ts` | Modify | Add `syncClientByEmail` function to exports |
+
+## Technical Details
+
+### AdminClientCreator.tsx Changes
+
+```typescript
+// Updated predefined clients
+const PREDEFINED_CLIENTS = [
+  {
+    id: 'scott',
+    firstName: 'Scott',
+    lastName: 'K',
+    email: 'scott.k1@outlook.com',  // Real Dr. Green email
+    countryCode: 'ZAF',  // South Africa (default for open countries)
+    // ... shipping details
+  },
+  {
+    id: 'kayleigh',
+    firstName: 'Kayleigh',
+    lastName: 'SM',
+    email: 'kayleigh.sm@gmail.com',  // Real Dr. Green email
+    countryCode: 'ZAF',
+    // ... shipping details
+  },
+];
+
+// New find & link function
+const findAndLinkClient = async (client) => {
+  const result = await syncClientByEmail(client.email);
+  if (result.data?.success && result.data?.client) {
+    // Client found - show details and sync status
+    setResults(prev => [...prev, {
+      ...result.data.client,
+      success: true,
+      synced: result.data.synced,
+    }]);
+  } else {
+    // Not found or API error - offer to create new
+    toast({ title: 'Not Found', description: result.data?.message });
+  }
+};
+```
+
+### useDrGreenApi.ts Addition
+
+Add `syncClientByEmail` to the returned object alongside existing methods.
+
+## User Flow After Implementation
+
+1. Navigate to `/admin`
+2. See "Create Dr. Green Clients" section
+3. For Scott and Kayleigh with correct emails:
+   - Click **"Find & Link"** button
+   - System searches Dr. Green API
+   - If found: Shows client ID, status, and "Linked" badge
+   - If not found: Shows error with option to create new
+4. If needed, use "Create New" for fresh registration
+
+## Testing Plan
+
+1. Deploy changes
+2. Navigate to Admin Dashboard
+3. Click "Find & Link" for Scott (`scott.k1@outlook.com`)
+4. Verify the search returns client data (or clear error if not visible)
+5. Repeat for Kayleigh (`kayleigh.sm@gmail.com`)
+6. If clients are found, verify client IDs are displayed
+7. Test "Create New" fallback with a test email
+
+## Risk Considerations
+
+- If clients belong to a different NFT/API key pair, the search will return 401
+- In that case, the UI will clearly indicate that the clients cannot be accessed with current credentials
+- Manual intervention via Dr. Green DApp portal would be required to reassign clients
