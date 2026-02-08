@@ -575,6 +575,36 @@ export type Database = {
         }
         Relationships: []
       }
+      wallet_email_mappings: {
+        Row: {
+          created_at: string
+          email: string
+          id: string
+          is_active: boolean
+          label: string | null
+          updated_at: string
+          wallet_address: string
+        }
+        Insert: {
+          created_at?: string
+          email: string
+          id?: string
+          is_active?: boolean
+          label?: string | null
+          updated_at?: string
+          wallet_address: string
+        }
+        Update: {
+          created_at?: string
+          email?: string
+          id?: string
+          is_active?: boolean
+          label?: string | null
+          updated_at?: string
+          wallet_address?: string
+        }
+        Relationships: []
+      }
     }
     Views: {
       [_ in never]: never
