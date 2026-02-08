@@ -25,8 +25,8 @@ import '@rainbow-me/rainbowkit/styles.css';
  * is displayed in the UI components that use useTenant.
  */
 const config = getDefaultConfig({
-  appName: 'Cannabis Platform',
-  projectId: 'healing-buds-admin', // WalletConnect Cloud project ID - replace with production ID
+  appName: 'Healing Buds',
+  projectId: '0ed43641317392e224a038f3edc04ae7', // WalletConnect Cloud project ID (shared with Dr. Green DApp)
   chains: [mainnet],
   transports: {
     [mainnet.id]: http(),
