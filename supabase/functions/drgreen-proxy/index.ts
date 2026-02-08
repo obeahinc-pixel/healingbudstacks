@@ -104,7 +104,8 @@ const OWNERSHIP_ACTIONS = [
 ];
 
 // Public actions that don't require authentication (minimal - only webhooks/health)
-const PUBLIC_ACTIONS: string[] = ['debug-list-all-clients'];
+// TEMPORARY: bootstrap-test-client allows unauthenticated client creation for testing
+const PUBLIC_ACTIONS: string[] = ['debug-list-all-clients', 'bootstrap-test-client'];
 
 // Country-gated actions: open countries (ZA, TH) don't require auth, restricted (GB, PT) do
 const COUNTRY_GATED_ACTIONS = [
@@ -1737,7 +1738,7 @@ serve(async (req) => {
         logInfo(`Authenticated user accessing ${action}`);
       }
     } else if (!isPublicAction) {
-      // Check for admin debug mode bypass
+      // Check for admin debug mode bypass FIRST (before any auth checks)
       const debugHeader = req.headers.get('x-admin-debug-key');
       const debugSecret = getDebugSecret();
       const isDebugMode = debugHeader && debugSecret && debugHeader === debugSecret && DEBUG_ACTIONS.includes(action);
@@ -1748,7 +1749,7 @@ serve(async (req) => {
           debugHeaderPresent: true,
           timestamp: new Date().toISOString() 
         });
-        // Skip authentication and proceed to route processing
+        // Skip ALL authentication and admin checks, proceed directly to route processing
       } else {
         // Non-country-gated, non-public actions require authentication
         const authResult = await verifyAuthentication(req);
@@ -3728,6 +3729,116 @@ serve(async (req) => {
           }
         } else {
           console.error("[admin-reregister-client] API returned error status:", response.status);
+        }
+        
+        break;
+      }
+      
+      // TEMPORARY: Public bootstrap endpoint for test client creation
+      // This allows creating clients without authentication for development testing
+      case "bootstrap-test-client": {
+        const { email, firstName, lastName, countryCode, phoneCode, phoneCountryCode, contactNumber, shipping } = body || {};
+        
+        if (!email || !validateEmail(email)) {
+          throw new Error("Valid email is required");
+        }
+        if (!firstName || !lastName) {
+          throw new Error("firstName and lastName are required");
+        }
+        
+        console.log("[bootstrap-test-client] Creating client for:", String(email).slice(0, 5) + '***');
+        
+        const countryCodeMap: Record<string, string> = {
+          PT: 'PRT', GB: 'GBR', ZA: 'ZAF', TH: 'THA', US: 'USA',
+        };
+        
+        const shippingData = shipping || {};
+        const shippingCountryCode = shippingData.countryCode || countryCode || 'ZAF';
+        const alpha3CountryCode = countryCodeMap[shippingCountryCode] || shippingCountryCode;
+        
+        const bootstrapPayload: Record<string, unknown> = {
+          firstName: String(firstName).trim(),
+          lastName: String(lastName).trim(),
+          email: String(email).toLowerCase().trim(),
+          phoneCode: String(phoneCode || '+27'),
+          phoneCountryCode: String(phoneCountryCode || 'ZA').toUpperCase(),
+          contactNumber: String(contactNumber || '000000000'),
+          shipping: {
+            address1: String(shippingData.address1 || 'Address Pending').trim(),
+            address2: String(shippingData.address2 || '').trim(),
+            city: String(shippingData.city || 'City').trim(),
+            state: String(shippingData.state || shippingData.city || 'State').trim(),
+            country: String(shippingData.country || 'South Africa').trim(),
+            countryCode: alpha3CountryCode,
+            postalCode: String(shippingData.postalCode || '0000').trim(),
+            landmark: String(shippingData.landmark || '').trim(),
+          },
+          medicalRecord: {
+            dob: '1990-01-01',
+            gender: 'prefer_not_to_say',
+            medicalHistory0: false,
+            medicalHistory1: false,
+            medicalHistory2: false,
+            medicalHistory3: false,
+            medicalHistory4: false,
+            medicalHistory5: ['none'],
+            medicalHistory8: false,
+            medicalHistory9: false,
+            medicalHistory10: false,
+            medicalHistory12: false,
+            medicalHistory13: 'never',
+            medicalHistory14: ['never'],
+          },
+        };
+        
+        response = await drGreenRequestBody("/dapp/clients", "POST", bootstrapPayload, true);
+        
+        const clonedResp = response.clone();
+        const respBody = await clonedResp.text();
+        
+        console.log("[bootstrap-test-client] API Response status:", response.status);
+        console.log("[bootstrap-test-client] API Response body:", respBody.slice(0, 500));
+        
+        if (response.ok) {
+          try {
+            const rawData = JSON.parse(respBody);
+            const newClientId = rawData.client?.id || rawData.data?.id || rawData.clientId || rawData.id;
+            const newKycLink = rawData.client?.kycLink || rawData.data?.kycLink || rawData.kycLink;
+            
+            console.log("[bootstrap-test-client] Success! Client ID:", newClientId);
+            
+            // Update local drgreen_clients record if exists
+            const { data: existingClient } = await supabaseClient
+              .from('drgreen_clients')
+              .select('user_id')
+              .eq('email', String(email).toLowerCase().trim())
+              .maybeSingle();
+            
+            if (existingClient?.user_id) {
+              await supabaseClient
+                .from('drgreen_clients')
+                .update({
+                  drgreen_client_id: newClientId,
+                  kyc_link: newKycLink,
+                  updated_at: new Date().toISOString(),
+                  shipping_address: bootstrapPayload.shipping,
+                })
+                .eq('user_id', existingClient.user_id);
+            }
+            
+            return new Response(JSON.stringify({
+              success: true,
+              clientId: newClientId,
+              kycLink: newKycLink,
+              email: String(email).toLowerCase().trim(),
+              message: `Client created successfully under current API key.`,
+            }), {
+              status: 200,
+              headers: { ...corsHeaders, "Content-Type": "application/json" },
+            });
+          } catch (parseError) {
+            console.error("[bootstrap-test-client] Parse error:", parseError);
+          }
         }
         
         break;
