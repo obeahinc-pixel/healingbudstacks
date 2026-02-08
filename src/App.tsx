@@ -16,6 +16,7 @@ import ProtectedRoute from "@/components/ProtectedRoute";
 import { ProtectedNFTRoute } from "@/components/ProtectedNFTRoute";
 import { ComplianceGuard } from "@/components/ComplianceGuard";
 import { CheckoutErrorFallback } from "@/components/shop/CheckoutErrorFallback";
+import CookieConsentBanner from "@/components/CookieConsentBanner";
 
 import { ShopProvider } from "@/context/ShopContext";
 import { CursorProvider } from "@/context/CursorContext";
@@ -152,6 +153,7 @@ const App = () => (
                           <main id="main-content" tabIndex={-1}>
                             <AnimatedRoutes />
                           </main>
+                          <CookieConsentBanner />
                         </TenantProvider>
                       </BrowserRouter>
                     </CursorFollower>
