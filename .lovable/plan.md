@@ -1,51 +1,38 @@
 
 
-## Re-Register Scott and Kayliegh with Current Dr. Green API Key
+# Secret Configuration Plan
 
-### Status: ✅ COMPLETE
+## Overview
+Update all 9 API secrets with real credentials for the Healing Buds remixed project. This will enable connectivity to all four Dr. Green API environments.
 
-### What Was Done
+## Secrets to Update
 
-#### Phase 1: Database Cleanup ✅
-- Deleted stale `drgreen_clients` records for both users:
-  - `scott.k1@outlook.com`
-  - `kayliegh.sm@gmail.com`
-- Their `auth.users` and `profiles` records remain intact (they can still log in)
+### Dr. Green Production (Primary)
+1. **DRGREEN_API_KEY** - Base64-encoded API key for production
+2. **DRGREEN_PRIVATE_KEY** - Base64-encoded private key for request signing
 
-#### Phase 2: Edge Function Implementation ✅
-- Added `admin-reregister-client` to `ADMIN_ACTIONS` array
-- Implemented handler that:
-  1. Accepts client data (email, firstName, lastName, shipping, etc.)
-  2. Builds a valid Dr. Green client creation payload with minimal medical defaults
-  3. Calls `POST /dapp/clients` with current API credentials
-  4. Returns new `clientId` and `kycLink`
-  5. Updates local `drgreen_clients` record if user exists
+### Dr. Green Alt Production (Testing)
+3. **DRGREEN_ALT_API_KEY** - Alternative production API key
+4. **DRGREEN_ALT_PRIVATE_KEY** - Alternative production private key
 
-#### Phase 3: Admin UI ✅
-- Added `reregisterClient` method to `useDrGreenApi.ts` hook
-- Added "Re-Register" button to Admin Client Manager with:
-  - KeyRound icon
-  - Confirmation dialog before action
-  - Loading state during API call
-  - Toast notifications for success/failure
-  - Automatic clipboard copy of new KYC link
+### Dr. Green Staging (Official Test Environment)
+5. **DRGREEN_STAGING_API_KEY** - Staging environment API key
+6. **DRGREEN_STAGING_PRIVATE_KEY** - Staging environment private key
+7. **DRGREEN_STAGING_API_URL** - Staging API base URL (e.g., `https://stage-api.drgreennft.com/api/v1`)
 
-### How to Use
+### External Services
+8. **RESEND_API_KEY** - Resend email service API key
+9. **EXTERNAL_SUPABASE_SERVICE_KEY** - Service role key for cross-project Supabase access
 
-1. Log in as admin
-2. Navigate to Admin Dashboard > Client Management
-3. Find Scott or Kayliegh in the client list
-4. Click the "Re-Register" button (amber colored with key icon)
-5. Confirm the action in the dialog
-6. System will:
-   - Send client creation payload to Dr. Green API
-   - Store new client ID locally
-   - Copy new KYC link to clipboard
-7. Share the KYC link with the user to complete verification
+## Process
+Once approved, I will prompt you to enter each secret value one at a time using secure input forms. Each prompt will include:
+- The secret name
+- Where to find the value (Dr. Green dashboard, Resend dashboard, etc.)
+- Expected format (Base64-encoded, URL, etc.)
 
-### Next Steps for Users
+## Verification
+After all secrets are entered, I will:
+1. Re-deploy the edge functions to pick up new values
+2. Run health checks on all 4 API environments
+3. Confirm successful connectivity
 
-After re-registration:
-1. Scott/Kayliegh will need to complete KYC verification via the new link
-2. Once verified in Dr. Green DApp admin portal, they can shop and place orders
-3. Use "Sync" button to refresh their status after Dr. Green approval
