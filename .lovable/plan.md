@@ -1,142 +1,71 @@
-
-
 ## Full Resolution: Dr. Green DApp API Authentication, NFT Admin vs Patient Architecture, and Client Listing Fix
 
 ---
 
-### The Core Problem
+### Status: Phase 1 Complete — Awaiting Browser Capture
 
-All 3 API credential sets return **401 Unauthorized** on `/dapp/clients` (list clients), while `/strains` works fine. You can sign into `dapp.drgreennft.com` with your wallet and see clients there. This document resolves the confusion by mapping out the **two completely different authentication systems** at play.
+**Completed:**
+- ✅ Full API reference document created: `docs/DRGREEN-API-FULL-REFERENCE.md`
+- ✅ All 50+ proxy actions mapped and documented
+- ✅ Medical questionnaire (22 questions) with exact option values documented
+- ✅ Two authentication systems (API Key + HMAC vs Wallet Session) fully documented
+- ✅ NFT Admin vs Patient architecture documented
+- ✅ All 5 environments and credential routing documented
+- ✅ Proxy auth tests confirmed edge function correctly enforces Supabase auth
+- ✅ Postman collection from user confirms Bearer token auth is supported
 
----
-
-### Two Authentication Systems: How They Differ
-
-```text
-SYSTEM 1: API Key + HMAC Signing (Server-to-Server)
-====================================================
-  Used by: Our drgreen-proxy edge function
-  Auth method: x-auth-apikey + x-auth-signature (HMAC-SHA256)
-  Identity: Tied to a specific NFT via the API key pair
-  Scope: Can only see clients/orders created under THAT NFT's scope
-  Works for: /strains (global), /dapp/clients (IF the NFT has operator permissions)
-
-SYSTEM 2: Wallet-Based DApp Login (Browser Session)
-====================================================
-  Used by: dapp.drgreennft.com (the Dr. Green admin portal)
-  Auth method: MetaMask wallet signature -> DApp issues a session/JWT
-  Identity: Your wallet address (0x0b60d85...) which HOLDS the NFT
-  Scope: Full access to all data under NFTs owned by that wallet
-  Works for: Everything (clients, orders, carts, dashboard)
-```
-
-**Why this matters:** When you log into `dapp.drgreennft.com` with your wallet, the DApp verifies your wallet holds an NFT on-chain, then gives you a session with full permissions. Our proxy uses static API key pairs which are **scoped to a specific NFT instance** -- and those key pairs may not have `/dapp/clients` list permission, even though they can create clients and list strains.
+**Key Finding:** The Postman collection provided by the user uses `Authorization: Bearer {{bearer_token}}` — confirming the API supports session-based JWT auth (not just API key + HMAC). This strongly suggests the DApp issues a Bearer token after wallet verification.
 
 ---
 
-### What the User Sees in `dapp.drgreennft.com` (Browser DevTools Capture Needed)
+### Immediate Next Step: Browser DevTools Capture
 
-When you sign into the DApp and navigate to the Clients section, the browser makes API calls. We need to capture these headers to understand exactly which auth mechanism the DApp uses for its API calls:
-
-**Option A -- The DApp uses the same `x-auth-apikey` + `x-auth-signature` pattern** but with different credentials (a "master" key pair tied to the wallet owner). If so, we need those credentials stored as secrets.
-
-**Option B -- The DApp uses a Bearer token / JWT** obtained after the wallet signature verification. If so, we need to replicate the DApp's login flow in our proxy: (1) sign a message with our wallet, (2) send it to the DApp's auth endpoint, (3) receive a session token, (4) use that token for subsequent API calls.
-
-**Option C -- The DApp uses a wallet address header** (e.g., `x-wallet-address` or similar) alongside the API key, and the API checks on-chain NFT ownership at request time. If so, we need to add that header to our proxy requests.
-
----
-
-### Resolution Plan (3 Phases)
-
-#### Phase 1: Capture the DApp's Auth Headers (Manual Step -- You Do This)
-
+**You need to:**
 1. Open `dapp.drgreennft.com` in Chrome/Firefox
-2. Open DevTools (F12) -> Network tab
-3. Connect your wallet (`0x0b60d85fefcd9064a29f7df0f8cbc7901b9e6c84`) and sign in
+2. Open DevTools (F12) → Network tab
+3. Connect wallet `0x0b60d85fefcd9064a29f7df0f8cbc7901b9e6c84` and sign in
 4. Navigate to the Clients list
 5. In the Network tab, filter by `api.drgreennft.com`
 6. Click on any successful request to `/dapp/clients`
 7. Copy/screenshot:
    - Request URL
-   - All Request Headers (especially `Authorization`, `x-auth-apikey`, `x-auth-signature`, and any custom headers)
+   - All Request Headers (especially `Authorization`, `x-auth-apikey`, `x-auth-signature`)
    - Response Status (should be 200)
 
-This tells us definitively which auth pattern the DApp uses.
-
-#### Phase 2: Implement the Correct Auth Flow in the Proxy
-
-Based on what we discover:
-
-**If Option A (different API key pair):**
-- Store the DApp's master API key pair as new secrets (`DRGREEN_DAPP_API_KEY` / `DRGREEN_DAPP_PRIVATE_KEY`)
-- Add a new environment `dapp-master` to `ENV_CONFIG` in the proxy
-- Route `admin-list-all-clients` and other dApp admin actions through this environment
-
-**If Option B (session token from wallet login):**
-- Create a new edge function `drgreen-dapp-session` that:
-  1. Uses our stored wallet private key to sign a SIWE message
-  2. Sends the signature to the DApp's auth endpoint
-  3. Receives and caches a session JWT (with TTL)
-  4. Returns the JWT for use by other proxy actions
-- Modify `drgreen-proxy` to call this function for dApp admin actions and pass the JWT as `Authorization: Bearer <token>` instead of API key + signature headers
-
-**If Option C (wallet address header):**
-- Add `x-wallet-address: 0x0b60d85fefcd9064a29f7df0f8cbc7901b9e6c84` (from secrets) to the proxy's request headers for dApp-scoped endpoints
-
-#### Phase 3: Create the Full API Reference Document
-
-Create `docs/DRGREEN-API-FULL-REFERENCE.md` consolidating all findings into a single authoritative document covering:
-
-1. **Architecture overview** -- proxy pattern, two auth systems
-2. **NFT Admin vs Patient distinction:**
-   - **NFT Admin (Wallet Holder):** Holds Dr. Green Digital Key NFT. Signs in via MetaMask. Gets full dApp access (create/list/manage clients, orders, dashboard). This is you (Ricardo) and any other NFT holders.
-   - **Patient (Client):** Created via `POST /dapp/clients`. Does NOT hold an NFT. Does NOT sign in via wallet. Goes through medical questionnaire, KYC, admin approval. Can browse products and place orders once verified (`isKYCVerified === true` AND `adminApproval === "VERIFIED"`).
-3. **All endpoints** with request/response schemas
-4. **Medical questionnaire** -- all 22 questions with exact option values
-5. **curl and fetch examples** for every endpoint
-6. **Error handling** and status codes
-7. **Proxy action mapping** -- all 45+ frontend actions to API endpoints
+**This single piece of data will tell us exactly which auth flow to implement.**
 
 ---
 
-### NFT Admin vs Patient: Complete Breakdown
+### Phase 2: Implementation (After Browser Capture)
 
-| Property | NFT Admin (You) | Patient (Client) |
-|----------|----------------|-------------------|
-| **Identity** | Wallet address holding Dr. Green NFT | Email + personal details |
-| **Auth method** | MetaMask wallet signature (SIWE) | Email/password via Supabase Auth |
-| **Access level** | Full dApp: clients, orders, dashboard, analytics | Own profile, shop, cart, orders only |
-| **Created via** | Wallet connection + NFT verification | `POST /dapp/clients` with medical record |
-| **KYC required** | No (NFT ownership IS the credential) | Yes -- `isKYCVerified` + `adminApproval` |
-| **Can list all clients** | Yes (via dApp portal or API with correct auth) | No |
-| **Can create orders for others** | Yes (admin action) | No (own orders only) |
-| **Our system role** | `admin` role in `user_roles` table | No role (default user) |
-| **Where they sign in** | `/auth` page via MetaMask -> `wallet-auth` edge function | `/auth` page via email/password -> Supabase Auth |
-| **Session creation** | `wallet-auth` verifies signature + NFT balance -> issues OTP -> Supabase session | Standard Supabase `signInWithPassword` |
+Based on the Postman collection evidence, the most likely resolution is **Option B (Bearer Token)**:
 
----
+1. Create `drgreen-dapp-session` edge function that:
+   - Signs a SIWE message using stored wallet key
+   - Authenticates with the DApp's auth endpoint
+   - Receives a Bearer JWT
+   - Caches it (with TTL)
+2. Modify `drgreen-proxy` to use Bearer token for dApp admin actions
+3. Test client listing with the new auth flow
 
-### Immediate Fix: What We Can Do Right Now (Before Browser Capture)
-
-**Test client creation** via `POST /dapp/clients` using `production-write` credentials. Even if we cannot LIST clients, we may be able to CREATE them. This would confirm the write credentials work and the 401 is specifically a read/list permission issue.
-
-**Verify NFT ownership on-chain** by calling the `balanceOf` function on contract `0x217ddEad61a42369A266F1Fb754EB5d3EBadc88a` for wallet `0x0b60d85fefcd9064a29f7df0f8cbc7901b9e6c84`. This confirms our wallet actually holds the NFT.
+**Alternative resolutions if Bearer token doesn't work:**
+- **Option A:** Store the DApp's master API key pair as new secrets
+- **Option C:** Add wallet address header to proxy requests
 
 ---
 
-### Technical Details
+### Phase 3: Remaining Documentation
 
-**Files to modify (Phase 2, after capture):**
-- `supabase/functions/drgreen-proxy/index.ts` -- Add new auth flow based on findings
-- Possibly create `supabase/functions/drgreen-dapp-session/index.ts` -- If session-based auth is needed
-- `docs/DRGREEN-API-FULL-REFERENCE.md` -- New comprehensive reference document
-- `.agent/knowledge/API_INFRASTRUCTURE.md` -- Update with two-auth-system documentation
-
-**No files modified in this plan** -- this is investigation and documentation only until we have the browser capture data.
+After auth is resolved:
+- Update `docs/DRGREEN-API-FULL-REFERENCE.md` with confirmed auth headers
+- Update `.agent/knowledge/API_INFRASTRUCTURE.md` with two-auth-system docs
+- Mark all endpoints as working/not-working with the new auth flow
 
 ---
 
-### What I Need From You
+### Reference Documents
 
-Sign into `dapp.drgreennft.com` with your wallet, open DevTools Network tab, navigate to Clients, and share the request headers from any successful API call. This single piece of information will tell us exactly how to fix the 401 and complete the integration.
-
+- `docs/DRGREEN-API-FULL-REFERENCE.md` — Complete API reference (NEW)
+- `docs/DRGREEN-API-INTEGRATION.md` — Integration guide (existing)
+- `docs/DRGREEN-API-SIGNING-KNOWLEDGE.md` — Signing knowledge (existing)
+- `.agent/knowledge/API_INFRASTRUCTURE.md` — Infrastructure knowledge base (existing)
