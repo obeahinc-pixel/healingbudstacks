@@ -104,8 +104,7 @@ const OWNERSHIP_ACTIONS = [
 ];
 
 // Public actions that don't require authentication (minimal - only webhooks/health)
-// TEMPORARY: bootstrap-test-client allows unauthenticated client creation for testing
-const PUBLIC_ACTIONS: string[] = ['debug-list-all-clients', 'bootstrap-test-client', 'debug-compare-keys', 'debug-signing-test'];
+const PUBLIC_ACTIONS: string[] = [];
 
 // Country-gated actions: open countries (ZA, TH) don't require auth, restricted (GB, PT) do
 const COUNTRY_GATED_ACTIONS = [

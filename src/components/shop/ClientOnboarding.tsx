@@ -5,12 +5,6 @@ import { z } from 'zod';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { buildLegacyClientPayload, toAlpha3 } from '@/lib/drgreenApi';
-import { 
-  isMockModeEnabled, 
-  createMockClientResponse, 
-  simulateApiDelay,
-  getMockModeStatus 
-} from '@/lib/mockMode';
 import {
   User,
   MapPin,
@@ -622,47 +616,8 @@ export function ClientOnboarding() {
       console.log('[Registration] Legacy payload built:', JSON.stringify(legacyPayload, null, 2));
       console.log('[Registration] Has clientBusiness:', !!legacyPayload.clientBusiness);
 
-      // Check if mock mode is enabled
-      const mockStatus = getMockModeStatus();
-      if (mockStatus.enabled) {
-        console.log('[Registration] 🎭 MOCK MODE ENABLED via', mockStatus.source);
-      }
-
-      // Try to call edge function to create client (non-blocking)
+      // Try to call edge function to create client
       try {
-        // === MOCK MODE: Simulate successful API response ===
-        if (isMockModeEnabled()) {
-          console.log('[Registration] 🎭 ========== MOCK MODE ACTIVE ==========');
-          console.log('[Registration] 🎭 Simulating API call with delay...');
-          
-          await simulateApiDelay(800, 1500);
-          
-          const mockResponse = createMockClientResponse({
-            email: formData.personal?.email || '',
-            firstName: formData.personal?.firstName || '',
-            lastName: formData.personal?.lastName || '',
-            countryCode: formData.address?.country || 'PT',
-          });
-          
-          console.log('[Registration] 🎭 Mock response:', mockResponse);
-          
-          clientId = mockResponse.clientId;
-          kycLink = mockResponse.kycLink;
-          apiSuccess = true;
-          
-          logEvent('registration.success', clientId, { 
-            hasKycLink: true, 
-            countryCode: formData.address?.country,
-            mockMode: true 
-          });
-          
-          toast({
-            title: '🎭 Mock Mode Active',
-            description: 'Registration simulated successfully. This is test mode.',
-          });
-          
-        } else {
-          // === LIVE MODE: Call real API ===
           console.log('[Registration] ========== PRE-REQUEST DIAGNOSTICS ==========');
           console.log('[Registration] Timestamp:', new Date().toISOString());
           console.log('[Registration] Supabase URL:', import.meta.env.VITE_SUPABASE_URL);
@@ -751,7 +706,6 @@ export function ClientOnboarding() {
               statusCode: result?.statusCode,
             });
           }
-        }
       } catch (apiError: any) {
         console.error('[Registration] ========== API CALL FAILED ==========');
         console.error('[Registration] Error type:', typeof apiError);
