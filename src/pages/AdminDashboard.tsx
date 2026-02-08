@@ -43,6 +43,7 @@ import { KYCJourneyViewer } from "@/components/admin/KYCJourneyViewer";
 import { AdminEmailTrigger } from "@/components/admin/AdminEmailTrigger";
 import { AdminClientImport } from "@/components/admin/AdminClientImport";
 import { AdminClientManager } from "@/components/admin/AdminClientManager";
+import { AdminClientCreator } from "@/components/admin/AdminClientCreator";
 import { ApiDebugPanel } from "@/components/admin/ApiDebugPanel";
 import { ApiTestRunner } from "@/components/admin/ApiTestRunner";
 import { ApiComparisonDashboard } from "@/components/admin/ApiComparisonDashboard";
@@ -669,6 +670,11 @@ const AdminDashboard = () => {
               </Card>
             </motion.div>
           ))}
+        </div>
+
+        {/* Client Creator - Create Scott & Kayleigh */}
+        <div className="mb-12">
+          <AdminClientCreator />
         </div>
 
         {/* Client Management */}
