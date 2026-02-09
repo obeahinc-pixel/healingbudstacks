@@ -335,7 +335,7 @@ const handler = async (req: Request): Promise<Response> => {
 
     // Determine from address - use verified domain or fallback
     // Note: Until domains are verified on Resend, we use onboarding@resend.dev
-    const fromAddress = `${domainConfig.brandName} <noreply@healingbuds.co.za>`;
+    const fromAddress = `${domainConfig.brandName} <noreply@send.healingbuds.co.za>`;
 
     console.log('[send-client-email] Sending email:', {
       from: fromAddress,
