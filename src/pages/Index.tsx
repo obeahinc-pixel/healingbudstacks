@@ -17,6 +17,7 @@ import MobileBottomActions from "@/components/MobileBottomActions";
 import SEOHead from "@/components/SEOHead";
 import HBIcon from "@/components/HBIcon";
 import TrustMotifs, { CertifiedMotif, LabTestedMotif, SecureShieldMotif, DeliveryMotif } from "@/components/TrustMotifs";
+import { FeaturedStrains } from "@/components/FeaturedStrains";
 import SectionNavigation from "@/components/SectionNavigation";
 import ReadingProgress from "@/components/ReadingProgress";
 import { Button } from "@/components/ui/button";
@@ -222,6 +223,9 @@ const Index = () => {
               </div>
             </section>
           )}
+
+          {/* Featured Strains - visible only for verified users */}
+          {isEligible && <FeaturedStrains />}
 
           {/* Quick Eligibility Process */}
           <section id="how-it-works" className="py-16 lg:py-24 bg-muted/30">
