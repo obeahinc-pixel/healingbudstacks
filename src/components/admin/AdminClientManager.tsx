@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useRef } from "react";
-import { motion } from "framer-motion";
+import { motion, AnimatePresence } from "framer-motion";
 import {
   Users,
   RefreshCw,
@@ -18,6 +18,8 @@ import {
   ExternalLink,
   Info,
   KeyRound,
+  MapPin,
+  ChevronDown,
 } from "lucide-react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -34,6 +36,8 @@ import {
 } from "@/components/ui/tooltip";
 import { useToast } from "@/hooks/use-toast";
 import { useDrGreenApi } from "@/hooks/useDrGreenApi";
+import { supabase } from "@/integrations/supabase/client";
+import { ShippingAddressForm, type ShippingAddress } from "@/components/shop/ShippingAddressForm";
 import { cn } from "@/lib/utils";
 
 interface DrGreenClient {
@@ -60,7 +64,7 @@ const DRGREEN_ADMIN_URL = "https://dapp.drgreennft.com";
 
 export function AdminClientManager() {
   const { toast } = useToast();
-  const { getDappClients, getClientsSummary, syncClientStatus, reregisterClient } = useDrGreenApi();
+  const { getDappClients, getClientsSummary, syncClientStatus, reregisterClient, getDappClientDetails } = useDrGreenApi();
   
   const [clients, setClients] = useState<DrGreenClient[]>([]);
   const [summary, setSummary] = useState<ClientsSummary | null>(null);
@@ -72,6 +76,11 @@ export function AdminClientManager() {
   const [reregisteringClientId, setReregisteringClientId] = useState<string | null>(null);
   const [filter, setFilter] = useState<FilterStatus>("all");
   const [searchQuery, setSearchQuery] = useState("");
+  
+  // Address panel state
+  const [expandedClientId, setExpandedClientId] = useState<string | null>(null);
+  const [fetchingAddressFor, setFetchingAddressFor] = useState<string | null>(null);
+  const [clientAddresses, setClientAddresses] = useState<Record<string, ShippingAddress | null>>({});
 
   // Use refs to access current filter/search values without triggering re-creation
   const filterRef = useRef(filter);
@@ -272,6 +281,77 @@ export function AdminClientManager() {
     toast({
       title: "Copied",
       description: "Client ID copied to clipboard.",
+    });
+  };
+
+  // Toggle address panel for a client
+  const handleToggleAddress = async (clientId: string) => {
+    if (expandedClientId === clientId) {
+      setExpandedClientId(null);
+      return;
+    }
+    
+    setExpandedClientId(clientId);
+    
+    // If we already fetched this address, don't re-fetch
+    if (clientAddresses[clientId] !== undefined) return;
+    
+    setFetchingAddressFor(clientId);
+    try {
+      const result = await getDappClientDetails(clientId);
+      
+      // Extract shipping from nested API response
+      const responseData = result.data as unknown as { data?: { shipping?: ShippingAddress } };
+      const shipping = responseData?.data?.shipping || (result.data as { shipping?: ShippingAddress })?.shipping || null;
+      
+      setClientAddresses(prev => ({ ...prev, [clientId]: shipping }));
+      
+      // Auto-sync to local DB if address exists
+      if (shipping) {
+        try {
+          const shippingJson = {
+            address1: shipping.address1,
+            address2: shipping.address2 || '',
+            landmark: shipping.landmark || '',
+            city: shipping.city,
+            state: shipping.state || '',
+            country: shipping.country,
+            countryCode: shipping.countryCode,
+            postalCode: shipping.postalCode,
+          };
+          
+          await supabase
+            .from('drgreen_clients')
+            .update({ 
+              shipping_address: shippingJson,
+              updated_at: new Date().toISOString(),
+            })
+            .eq('drgreen_client_id', clientId);
+          
+          console.log('[AdminClientManager] Synced address to local DB for client:', clientId);
+        } catch (syncErr) {
+          console.warn('Local DB address sync failed:', syncErr);
+        }
+      }
+    } catch (err) {
+      console.error('Failed to fetch client details:', err);
+      setClientAddresses(prev => ({ ...prev, [clientId]: null }));
+      toast({
+        title: "Error",
+        description: "Failed to fetch client address from API.",
+        variant: "destructive",
+      });
+    } finally {
+      setFetchingAddressFor(null);
+    }
+  };
+
+  // Handle address save success from the form
+  const handleAddressSaved = (clientId: string, address: ShippingAddress) => {
+    setClientAddresses(prev => ({ ...prev, [clientId]: address }));
+    toast({
+      title: "Address Updated",
+      description: "Shipping address saved to DApp API and local database.",
     });
   };
 
@@ -513,7 +593,29 @@ export function AdminClientManager() {
 
                         {/* Action Buttons */}
                         <div className="flex items-center gap-2 flex-wrap">
-                          {/* Re-Register Button - Always available for admin to re-sync with current API key */}
+                          {/* Address Button */}
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            onClick={() => handleToggleAddress(client.id)}
+                            disabled={fetchingAddressFor === client.id}
+                            className="border-primary/30"
+                          >
+                            {fetchingAddressFor === client.id ? (
+                              <Loader2 className="w-4 h-4 animate-spin" />
+                            ) : (
+                              <>
+                                <MapPin className="w-4 h-4 mr-1" />
+                                Address
+                                <ChevronDown className={cn(
+                                  "w-3 h-3 ml-1 transition-transform",
+                                  expandedClientId === client.id && "rotate-180"
+                                )} />
+                              </>
+                            )}
+                          </Button>
+
+                          {/* Re-Register Button */}
                           <TooltipProvider>
                             <Tooltip>
                               <TooltipTrigger asChild>
@@ -535,7 +637,7 @@ export function AdminClientManager() {
                                 </Button>
                               </TooltipTrigger>
                               <TooltipContent className="max-w-xs">
-                                <p>Re-register this client with the current API key pair. Use when clients were created with old credentials.</p>
+                                <p>Re-register this client with the current API key pair.</p>
                               </TooltipContent>
                             </Tooltip>
                           </TooltipProvider>
@@ -616,6 +718,63 @@ export function AdminClientManager() {
                           )}
                         </div>
                       </div>
+
+                      {/* Expandable Address Panel */}
+                      <AnimatePresence>
+                        {expandedClientId === client.id && (
+                          <motion.div
+                            initial={{ height: 0, opacity: 0 }}
+                            animate={{ height: "auto", opacity: 1 }}
+                            exit={{ height: 0, opacity: 0 }}
+                            transition={{ duration: 0.2 }}
+                            className="overflow-hidden"
+                          >
+                            <div className="mt-4 pt-4 border-t border-border/50">
+                              <div className="flex items-center gap-2 mb-3">
+                                <MapPin className="w-4 h-4 text-primary" />
+                                <span className="font-medium text-sm">Shipping Address</span>
+                              </div>
+                              
+                              {fetchingAddressFor === client.id ? (
+                                <div className="flex items-center gap-2 py-4 text-sm text-muted-foreground">
+                                  <Loader2 className="w-4 h-4 animate-spin" />
+                                  Fetching address from DApp API...
+                                </div>
+                              ) : (
+                                <>
+                                  {clientAddresses[client.id] && (
+                                    <div className="mb-3 p-3 rounded-lg bg-muted/50 text-sm">
+                                      <p className="font-medium text-foreground mb-1">Current Address:</p>
+                                      <p>{clientAddresses[client.id]!.address1}</p>
+                                      {clientAddresses[client.id]!.address2 && (
+                                        <p>{clientAddresses[client.id]!.address2}</p>
+                                      )}
+                                      <p>
+                                        {clientAddresses[client.id]!.city}
+                                        {clientAddresses[client.id]!.state && `, ${clientAddresses[client.id]!.state}`}
+                                        {' '}{clientAddresses[client.id]!.postalCode}
+                                      </p>
+                                      <p>{clientAddresses[client.id]!.country}</p>
+                                    </div>
+                                  )}
+                                  {!clientAddresses[client.id] && clientAddresses[client.id] !== undefined && (
+                                    <p className="text-sm text-muted-foreground mb-3">No address on file — add one below.</p>
+                                  )}
+                                  <ShippingAddressForm
+                                    clientId={client.id}
+                                    initialAddress={clientAddresses[client.id]}
+                                    variant="inline"
+                                    isAdmin={true}
+                                    submitLabel="Update Address"
+                                    onSuccess={(addr) => handleAddressSaved(client.id, addr)}
+                                    onCancel={() => setExpandedClientId(null)}
+                                  />
+                                </>
+                              )}
+                            </div>
+                          </motion.div>
+                        )}
+                      </AnimatePresence>
                     </CardContent>
                   </Card>
                 </motion.div>
