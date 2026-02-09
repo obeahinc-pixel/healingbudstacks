@@ -1,23 +1,47 @@
 
 
-## Update 8 Required Secrets
+## Update All Secrets and Complete Setup
 
-Update the following secrets with new values for this remixed project:
+All credentials have been provided. Here is what will be configured:
 
-1. **DRGREEN_API_KEY** -- Dr. Green production API key
-2. **DRGREEN_PRIVATE_KEY** -- Dr. Green production private/secret key for request signing
-3. **DRGREEN_STAGING_API_KEY** -- Dr. Green Railway (staging) API key
-4. **DRGREEN_STAGING_PRIVATE_KEY** -- Dr. Green Railway (staging) private key
-5. **DRGREEN_STAGING_API_URL** -- Dr. Green Railway staging API base URL
-6. **ADMIN_WALLET_ADDRESSES** -- Comma-separated list of admin wallet addresses
-7. **RESEND_API_KEY** -- Resend email service API key
-8. **EXTERNAL_SUPABASE_SERVICE_KEY** -- External Supabase service role key
+### Secrets to Update (7 of 8 provided)
 
-### Process
+| # | Secret | Value Source |
+|---|--------|-------------|
+| 1 | `DRGREEN_API_KEY` | Production public key (provided) |
+| 2 | `DRGREEN_PRIVATE_KEY` | Production private key (provided) |
+| 3 | `DRGREEN_STAGING_API_KEY` | Railway/Budstack public key (provided) |
+| 4 | `DRGREEN_STAGING_PRIVATE_KEY` | Railway/Budstack private key (provided) |
+| 5 | `DRGREEN_STAGING_API_URL` | `https://budstack-backend-main-development.up.railway.app` |
+| 6 | `RESEND_API_KEY` | `re_Jfr6ihh1_H76reahpYEoEEUoQHXHUcqob` |
+| 7 | `EXTERNAL_SUPABASE_SERVICE_KEY` | Supabase service role key (provided) |
 
-Each secret will be requested one at a time using the secure secret input tool. You will be prompted to paste each value.
+**Missing**: `ADMIN_WALLET_ADDRESSES` -- not provided. Will skip for now (can be added later, and wallet features are being hidden anyway).
 
-### After Secrets Are Set
+### API URL Configuration
 
-Run the Dr. Green health check endpoint to verify production and staging API connectivity are working with the new credentials.
+The proxy already has the correct URLs hardcoded:
+- **Production**: `https://api.drgreennft.com/api/v1`
+- **Staging**: `https://stage-api.drgreennft.com/api/v1` (default fallback)
+- **Railway**: Will use `DRGREEN_STAGING_API_URL` override when Railway environment is selected
+
+No proxy code changes needed for URLs.
+
+### UI Changes (from previous approved plan)
+
+1. **Remove "Connect Wallet" button** from the header
+2. **Replace "Admin Login" dropdown** with a simple "Patient Login" button linking to `/auth`
+3. These features will be developed in the background and re-enabled later
+
+### Hardcode Admin Access
+
+Create a database trigger so that when `healingbudsglobal@gmail.com` signs up (password: `Healing@2026`), they are automatically assigned the `admin` role.
+
+### Product Display
+
+Already confirmed: non-restricted countries (ZA, TH, etc.) show products freely without KYC/verification. No code changes needed.
+
+### Verification
+
+After secrets are set, run the Dr. Green health check endpoint to verify both production and staging connectivity.
 
