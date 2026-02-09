@@ -959,33 +959,33 @@ async function generateHmacSignatureFallback(
 }
 
 /**
- * Sign payload using HMAC-SHA256 (primary method)
- * Falls back to private key signing only if DRGREEN_USE_HMAC is explicitly set to "false"
+ * Sign payload using secp256k1 ECDSA (primary method)
+ * Falls back to HMAC only if DRGREEN_USE_HMAC is explicitly set to "true"
  */
 async function signPayload(payload: string, secretKey: string): Promise<string> {
-  const useHmac = Deno.env.get('DRGREEN_USE_HMAC') !== 'false';
+  const useHmac = Deno.env.get('DRGREEN_USE_HMAC') === 'true';
   
   if (useHmac) {
     return signWithHmac(payload, secretKey);
   }
   
-  // Legacy: use private key signing (secp256k1/RSA/EC)
-  return generatePrivateKeySignature(payload, secretKey);
+  // Primary: use secp256k1 ECDSA signing (matches working drgreen-comparison)
+  return generateSecp256k1Signature(payload, secretKey);
 }
 
 /**
- * Sign query string using HMAC-SHA256
+ * Sign query string using secp256k1 ECDSA
  * This is used for GET list endpoints
  */
 async function signQueryString(queryString: string, secretKey: string): Promise<string> {
-  return signWithHmac(queryString, secretKey);
+  return generateSecp256k1Signature(queryString, secretKey);
 }
 
 /**
  * Generate signature with specific mode (for diagnostics)
  */
 async function signPayloadWithMode(payload: string, secretKey: string, _useDecoded: boolean): Promise<string> {
-  return signWithHmac(payload, secretKey);
+  return generateSecp256k1Signature(payload, secretKey);
 }
 
 /**
@@ -1082,13 +1082,13 @@ async function drGreenRequestBody(
   
   const payload = body ? JSON.stringify(body) : "";
   
-  // HMAC-SHA256 signing of the JSON payload (matching health check approach)
-  const signature = await signWithHmac(payload, secretKey);
+  // Use secp256k1 ECDSA signing (matches working drgreen-comparison approach)
+  const signature = await generateSecp256k1Signature(payload, secretKey);
   
   if (enableDetailedLogging) {
     console.log("[API-DEBUG] Payload length:", payload.length);
     console.log("[API-DEBUG] Payload preview:", payload.slice(0, 150));
-    console.log("[API-DEBUG] Signing method: HMAC-SHA256");
+    console.log("[API-DEBUG] Signing method: secp256k1 ECDSA");
     console.log("[API-DEBUG] Signature length:", signature.length);
     console.log("[API-DEBUG] Signature prefix:", signature.slice(0, 16) + "...");
   }
@@ -1215,13 +1215,13 @@ async function drGreenRequestGet(
   }
   const queryString = params.toString();
   
-  // HMAC-SHA256 signing of the QUERY STRING (matching health check approach)
-  // For GET requests, sign the query string parameters, not an empty object
+  // Use secp256k1 ECDSA signing on query string (matches working drgreen-comparison approach)
+  // For GET requests, sign the query string parameters
   const dataToSign = queryString || "";
-  const signature = await signWithHmac(dataToSign, secretKey);
+  const signature = await generateSecp256k1Signature(dataToSign, secretKey);
   
   if (enableDetailedLogging) {
-    console.log("[API-DEBUG] Signing method: HMAC-SHA256 on query string");
+    console.log("[API-DEBUG] Signing method: secp256k1 ECDSA on query string");
     console.log("[API-DEBUG] Data being signed:", dataToSign);
     console.log("[API-DEBUG] Query string for URL:", queryString);
     console.log("[API-DEBUG] Signature length:", signature.length);
@@ -2215,7 +2215,7 @@ serve(async (req) => {
         // Sign the JSON payload with HMAC-SHA256 (matching health check approach)
         const signPayloadData = { cartId };
         const payloadStr = JSON.stringify(signPayloadData);
-        const signature = await signWithHmac(payloadStr, Deno.env.get("DRGREEN_PRIVATE_KEY")!);
+        const signature = await generateSecp256k1Signature(payloadStr, Deno.env.get("DRGREEN_PRIVATE_KEY")!);
         
         const apiKey = Deno.env.get("DRGREEN_API_KEY")!;
         const apiUrl = `${DRGREEN_API_URL}/dapp/carts/${cartId}?strainId=${strainId}`;
