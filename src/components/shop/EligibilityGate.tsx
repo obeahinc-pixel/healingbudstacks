@@ -3,6 +3,7 @@ import { ShieldAlert, FileCheck, Clock, CheckCircle2, ArrowRight } from 'lucide-
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { useShop } from '@/context/ShopContext';
+import { useUserRole } from '@/hooks/useUserRole';
 import { Link } from 'react-router-dom';
 
 interface EligibilityGateProps {
@@ -11,8 +12,9 @@ interface EligibilityGateProps {
 
 export function EligibilityGate({ children }: EligibilityGateProps) {
   const { drGreenClient, isEligible, isLoading } = useShop();
+  const { isAdmin, isLoading: roleLoading } = useUserRole();
 
-  if (isLoading) {
+  if (isLoading || roleLoading) {
     return (
       <div className="flex items-center justify-center py-20">
         <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary" />
@@ -20,7 +22,8 @@ export function EligibilityGate({ children }: EligibilityGateProps) {
     );
   }
 
-  if (isEligible) {
+  // Admins bypass eligibility — verification is not relevant for them
+  if (isAdmin || isEligible) {
     return <>{children}</>;
   }
 
