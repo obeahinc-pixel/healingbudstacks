@@ -16,7 +16,6 @@ import ProtectedRoute from "@/components/ProtectedRoute";
 import { ProtectedNFTRoute } from "@/components/ProtectedNFTRoute";
 import { ComplianceGuard } from "@/components/ComplianceGuard";
 import { CheckoutErrorFallback } from "@/components/shop/CheckoutErrorFallback";
-import { RootAdminGuard } from "@/components/RootAdminGuard";
 import CookieConsentBanner from "@/components/CookieConsentBanner";
 
 import { ShopProvider } from "@/context/ShopContext";
@@ -121,10 +120,10 @@ const AnimatedRoutes = () => {
           <Route path="/admin/strains" element={<AdminStrains />} />
           <Route path="/admin/strain-sync" element={<AdminStrainSync />} />
           <Route path="/admin/strain-knowledge" element={<AdminStrainKnowledge />} />
-          <Route path="/admin/roles" element={<RootAdminGuard><AdminRoles /></RootAdminGuard>} />
-          <Route path="/admin/wallet-mappings" element={<RootAdminGuard><AdminWalletMappings /></RootAdminGuard>} />
-          <Route path="/admin/tools" element={<RootAdminGuard><AdminTools /></RootAdminGuard>} />
-          <Route path="/admin/settings" element={<RootAdminGuard><AdminSettings /></RootAdminGuard>} />
+          <Route path="/admin/roles" element={<AdminRoles />} />
+          <Route path="/admin/wallet-mappings" element={<AdminWalletMappings />} />
+          <Route path="/admin/tools" element={<AdminTools />} />
+          <Route path="/admin/settings" element={<AdminSettings />} />
           
           
           {/* Legal */}
