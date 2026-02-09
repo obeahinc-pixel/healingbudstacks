@@ -351,48 +351,11 @@ function getStagingApiUrl(): string {
 }
 
 // Actions that require write-enabled API keys (client creation permissions)
-const WRITE_ACTIONS: string[] = [
-  'create-client',
-  'create-client-legacy', 
-  'admin-reregister-client',
-  'bootstrap-test-client',
-];
+// All actions now use standard production credentials (DRGREEN_API_KEY / DRGREEN_PRIVATE_KEY)
+// Write credentials are available but only used when explicitly requested via environment parameter
+const WRITE_ACTIONS: string[] = [];
 
-// dApp admin read actions that also need production-write credentials
-// These endpoints require operator-level NFT keys (same as write actions)
-const DAPP_ADMIN_READ_ACTIONS: string[] = [
-  'dashboard-summary',
-  'dashboard-analytics',
-  'sales-summary',
-  'dapp-clients',
-  'dapp-client-details',
-  'dapp-clients-list',
-  'dapp-orders',
-  'dapp-order-details',
-  'dapp-carts',
-  'dapp-nfts',
-  'dapp-strains',
-  'get-clients-summary',
-  'get-sales-summary',
-  'get-sales',
-  'admin-list-all-clients',
-  'sync-client-status',
-  'dapp-update-order',
-  // Client reads must use write credentials because clients are created under write NFT scope
-  'get-client',
-  'get-my-details',
-  'get-client-by-auth-email',
-  'get-cart',
-  'get-cart-legacy',
-  'get-order',
-  'get-orders',
-  'place-order',
-  'create-order',
-  'add-to-cart',
-  'remove-from-cart',
-  'empty-cart',
-  'update-shipping-address',
-];
+const DAPP_ADMIN_READ_ACTIONS: string[] = [];
 
 const ENV_CONFIG: Record<string, EnvConfig> = {
   production: {
