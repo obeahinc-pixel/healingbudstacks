@@ -15,7 +15,7 @@ const CookieConsentBanner = () => {
           animate={{ y: 0, opacity: 1 }}
           exit={{ y: 100, opacity: 0 }}
           transition={{ type: 'spring', damping: 25, stiffness: 300 }}
-          className="fixed bottom-4 left-4 right-4 z-[9999] md:left-auto md:right-6 md:bottom-6 md:max-w-md"
+          className="fixed bottom-28 left-4 right-4 z-[70] lg:bottom-6 lg:left-auto lg:right-6 lg:max-w-md pb-[env(safe-area-inset-bottom)]"
           role="dialog"
           aria-label="Cookie consent"
           aria-describedby="consent-description"
