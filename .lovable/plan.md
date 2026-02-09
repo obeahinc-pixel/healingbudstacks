@@ -1,64 +1,33 @@
 
-# Admin Shipping Address Management for Clients
+
+# Update Shipping Addresses for Existing Clients
 
 ## Problem
+Three existing client accounts are missing their shipping addresses in the local database. The user has provided the addresses directly.
 
-1. **Shipping addresses missing locally** for Scott's two accounts (Kay's was populated during testing). Future clients will have addresses created during onboarding, but existing clients need admin tooling to check and update addresses.
+## Data to Insert
 
-2. **Admin needs NFT-gated access** to view and edit any client's delivery address, fetching the current address from the DApp API (`dapp-client-details`) and allowing updates via the existing `admin-update-shipping-address` proxy action.
-
-## What Already Exists
-
-- `dapp-client-details` proxy action -- fetches full client details (including shipping) from the DApp API using admin credentials
-- `admin-update-shipping-address` proxy action -- PATCHes shipping address to DApp API for any client
-- `adminUpdateShippingAddress()` hook method in `useDrGreenApi`
-- `ShippingAddressForm` component with `variant="inline"` support
-- `AdminClientManager` component showing client list from DApp API
-- NFT gating via `ProtectedNFTRoute` and wallet context
+| Account | Email | Client ID | Address |
+|---|---|---|---|
+| Scott | scott.k1@outlook.com | dfd81e64-... (from DB) | 123 Sandton Drive, Sandton, Sandton, 2196, ZAF |
+| Kay | kayliegh.sm@gmail.com | 47542db8-... (from DB) | 1937 Prospect Street, Pretoria, Gauteng, 0036, ZAF |
+| Admin Scott | scott@healingbuds.global | fb70d208-8f12-4444-9b1b-e92bd68f675f | 123 Sandton Drive, Sandton, Sandton, 2196, ZAF |
 
 ## Changes
 
-### 1. Expand AdminClientManager with Address Panel
+### 1. Update `drgreen_clients` table directly
 
-**File: `src/components/admin/AdminClientManager.tsx`**
+Run three UPDATE statements to set `shipping_address` (JSONB) and `country_code` for each client:
 
-Add an expandable detail row to each client card that:
-- Has a "View / Edit Address" button on each client row
-- When clicked, calls `dapp-client-details` to fetch the client's current shipping address from the DApp
-- Displays the current address (or "No address on file")
-- Renders the `ShippingAddressForm` in `inline` variant, pre-populated with the fetched address
-- On save, calls `adminUpdateShippingAddress` (existing proxy action) and also updates the local `drgreen_clients.shipping_address` column
+- **Scott (scott.k1)**: `shipping_address` = `{"address1":"123 Sandton Drive","city":"Sandton","state":"Sandton","postalCode":"2196","country":"South Africa","countryCode":"ZAF"}`, `country_code` = `ZA`
+- **Kay**: `shipping_address` = `{"address1":"1937 Prospect Street","city":"Pretoria","state":"Gauteng","postalCode":"0036","country":"South Africa","countryCode":"ZAF"}`, `country_code` = `ZA`
+- **Admin Scott**: `shipping_address` = `{"address1":"123 Sandton Drive","city":"Sandton","state":"Sandton","postalCode":"2196","country":"South Africa","countryCode":"ZAF"}`, `country_code` = `ZA`
 
-Implementation details:
-- Add `expandedClientId` state to track which client row is expanded
-- Add `fetchingAddressFor` state for loading indicator
-- When expanding, call `dapp-client-details` with the client ID to get current address from DApp
-- Pass fetched address as `initialAddress` to `ShippingAddressForm`
-- The form's `onSuccess` callback will also write to local Supabase via the existing logic in `ShippingAddressForm`
+### 2. No code changes required
 
-### 2. Update ShippingAddressForm for Admin Use
-
-**File: `src/components/shop/ShippingAddressForm.tsx`**
-
-Add an `isAdmin` prop:
-- When `isAdmin=true`, use `adminUpdateShippingAddress` instead of `updateShippingAddress` for the DApp API call
-- This ensures the admin proxy action (which bypasses ownership checks) is used
-
-### 3. Sync Local Shipping Addresses for Existing Clients
-
-**File: `src/components/admin/AdminClientManager.tsx`**
-
-When the admin fetches a client's details from the DApp and the response includes a shipping address, automatically sync it to the local `drgreen_clients.shipping_address` column. This backfills the missing local data for Scott's accounts.
-
-### 4. Admin Route Protection
-
-The `AdminClientManager` is already rendered inside `AdminDashboard`, which is within `AdminLayout`. `AdminLayout` already checks for admin role. The NFT wallet connection is already displayed on the admin dashboard. No additional route changes needed -- the existing admin role check plus the wallet/NFT UI on the dashboard page satisfies the NFT login requirement.
+The `ShippingAddressForm` and checkout flow already read from `drgreen_clients.shipping_address`. Once populated, these addresses will appear automatically during checkout.
 
 ## Files Modified
 
-| File | Change |
-|---|---|
-| `src/components/admin/AdminClientManager.tsx` | Add expandable address view/edit per client using DApp API data |
-| `src/components/shop/ShippingAddressForm.tsx` | Add `isAdmin` prop to use admin proxy action |
+None -- this is a data-only update using SQL INSERT/UPDATE statements against the `drgreen_clients` table.
 
-## No New Dependencies Required
