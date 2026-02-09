@@ -9,6 +9,7 @@ import { Cart } from '@/components/shop/Cart';
 import { FloatingCartButton } from '@/components/shop/FloatingCartButton';
 import { RestrictedRegionGate } from '@/components/shop/RestrictedRegionGate';
 import { VerificationProgress } from '@/components/shop/VerificationProgress';
+import strainsHeroBg from '@/assets/strains-hero-bg.jpg';
 
 import { useShop } from '@/context/ShopContext';
 import { useTranslation } from 'react-i18next';
@@ -55,29 +56,39 @@ export default function Shop() {
       <div className="min-h-screen bg-background">
         <Header />
 
-        {/* Hero Section */}
-        <section className="relative pt-28 sm:pt-32 pb-8 sm:pb-12 overflow-hidden">
-          <div className="absolute inset-0 bg-gradient-to-b from-primary/5 to-transparent" />
+        {/* Hero Section with background image */}
+        <section className="relative pt-24 sm:pt-28 pb-12 sm:pb-16 overflow-hidden">
+          {/* Background image with overlay */}
+          <div className="absolute inset-0">
+            <img
+              src={strainsHeroBg}
+              alt=""
+              className="w-full h-full object-cover"
+              loading="eager"
+            />
+            <div className="absolute inset-0 bg-gradient-to-b from-background/85 via-background/75 to-background" />
+          </div>
+
           <div className="container mx-auto px-4 relative">
             <motion.div
               initial={{ opacity: 0, y: 20 }}
               animate={{ opacity: 1, y: 0 }}
-              className="max-w-3xl mx-auto text-center"
+              className="max-w-3xl mx-auto text-center space-y-5"
             >
-              <h1 className="text-3xl sm:text-4xl md:text-5xl font-bold text-foreground mb-3 sm:mb-4">
+              <h1 className="text-4xl sm:text-5xl md:text-6xl font-bold text-foreground tracking-tight">
                 Strains
               </h1>
-              <p className="text-base sm:text-lg text-muted-foreground mb-6 sm:mb-8 px-2">
+              <p className="text-base sm:text-lg text-muted-foreground max-w-xl mx-auto leading-relaxed">
                 {t('subtitle')}
               </p>
 
-              {/* Eligibility status - Verified badge with subtle indicator */}
+              {/* Eligibility status badges */}
               {drGreenClient && isEligible && (
                 <motion.div
                   initial={{ opacity: 0, scale: 0.95, y: 10 }}
                   animate={{ opacity: 1, scale: 1, y: 0 }}
                   transition={{ type: "spring", stiffness: 200, damping: 25 }}
-                  className="inline-flex items-center gap-3 px-5 py-3 rounded-xl text-sm font-medium bg-primary/10 border border-primary/25 text-primary"
+                  className="inline-flex items-center gap-3 px-5 py-3 rounded-xl text-sm font-medium bg-primary/10 border border-primary/25 text-primary backdrop-blur-sm"
                 >
                   <div className="p-1.5 rounded-lg bg-primary/15">
                     <ShieldCheck className="h-4 w-4" />
@@ -88,13 +99,12 @@ export default function Shop() {
                 </motion.div>
               )}
 
-              {/* Pending verification status */}
               {drGreenClient && !isEligible && (
                 <motion.div
                   initial={{ opacity: 0, scale: 0.95, y: 10 }}
                   animate={{ opacity: 1, scale: 1, y: 0 }}
                   transition={{ type: "spring", stiffness: 200, damping: 25 }}
-                  className="inline-flex items-center gap-3 px-5 py-3 rounded-xl text-sm font-medium bg-highlight/10 border border-highlight/30 text-highlight"
+                  className="inline-flex items-center gap-3 px-5 py-3 rounded-xl text-sm font-medium bg-highlight/10 border border-highlight/30 text-highlight backdrop-blur-sm"
                 >
                   <div className="p-1.5 rounded-lg bg-highlight/20">
                     <ShieldCheck className="h-4 w-4" />
@@ -103,7 +113,6 @@ export default function Shop() {
                 </motion.div>
               )}
 
-              {/* Verification Progress Tracker */}
               {drGreenClient && <VerificationProgress />}
             </motion.div>
           </div>
