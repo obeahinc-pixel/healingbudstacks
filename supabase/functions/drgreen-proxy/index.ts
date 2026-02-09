@@ -352,9 +352,6 @@ function getStagingApiUrl(): string {
 
 // All environments use the same credentials — no separate write keys
 // Production and Railway are the only two environments
-const WRITE_ACTIONS: string[] = []; // No longer needed — all actions use the same key
-
-const DAPP_ADMIN_READ_ACTIONS: string[] = [];
 
 const ENV_CONFIG: Record<string, EnvConfig> = {
   production: {
@@ -376,29 +373,14 @@ const ENV_CONFIG: Record<string, EnvConfig> = {
  * Priority: 1) Explicit env param 2) DRGREEN_USE_STAGING env var 3) production default
  */
 function getEnvironment(requestedEnv?: string): EnvConfig {
-  // If explicit environment requested, use it
+  // If explicit environment requested, use it (only production and railway supported)
   if (requestedEnv && ENV_CONFIG[requestedEnv]) {
     logInfo(`Using environment: ${requestedEnv} (explicit)`);
     return ENV_CONFIG[requestedEnv];
   }
   
-  // Check global staging override
-  const useStaging = Deno.env.get('DRGREEN_USE_STAGING') === 'true';
-  if (useStaging) {
-    logInfo('Using environment: staging (DRGREEN_USE_STAGING=true)');
-    return ENV_CONFIG.staging;
-  }
-  
   // Default to production
   return ENV_CONFIG.production;
-}
-
-/**
- * Get environment for any action — no separate write credentials needed.
- * All actions use the same key pair per environment.
- */
-function getWriteEnvironment(_action: string, requestedEnv?: string): EnvConfig {
-  return getEnvironment(requestedEnv);
 }
 
 /**
@@ -1396,52 +1378,30 @@ serve(async (req) => {
       });
     }
     
-    // Test all environments - verify credentials work for production, staging, and railway
-    if (action === 'test-staging') {
-      console.log("[drgreen-proxy] Testing all environment credentials...");
-      
-      const prodEnv = ENV_CONFIG.production;
-      const stagingEnv = ENV_CONFIG.staging;
-      const railwayEnv = ENV_CONFIG.railway;
-      
-      const { apiKey: prodApiKey, privateKey: prodPrivateKey } = getEnvCredentials(prodEnv);
-      const { apiKey: stagingApiKey, privateKey: stagingPrivateKey } = getEnvCredentials(stagingEnv);
-      const { apiKey: railwayApiKey, privateKey: railwayPrivateKey } = getEnvCredentials(railwayEnv);
+    // Test environments - verify credentials work for production and railway
+    if (action === 'test-staging' || action === 'test-environments') {
+      console.log("[drgreen-proxy] Testing environment credentials...");
       
       const result: Record<string, unknown> = {
         timestamp: new Date().toISOString(),
-        action: 'test-staging',
-        environments: {
-          production: {
-            name: prodEnv.name,
-            apiUrl: prodEnv.apiUrl,
-            apiKeyConfigured: !!prodApiKey,
-            privateKeyConfigured: !!prodPrivateKey,
-            apiKeyLength: prodApiKey?.length || 0,
-            apiKeyPrefix: prodApiKey ? prodApiKey.slice(0, 8) + '...' : 'N/A',
-          },
-          staging: {
-            name: stagingEnv.name,
-            apiUrl: stagingEnv.apiUrl,
-            apiKeyConfigured: !!stagingApiKey,
-            privateKeyConfigured: !!stagingPrivateKey,
-            apiKeyLength: stagingApiKey?.length || 0,
-            apiKeyPrefix: stagingApiKey ? stagingApiKey.slice(0, 8) + '...' : 'N/A',
-          },
-          railway: {
-            name: railwayEnv.name,
-            apiUrl: railwayEnv.apiUrl,
-            apiKeyConfigured: !!railwayApiKey,
-            privateKeyConfigured: !!railwayPrivateKey,
-            apiKeyLength: railwayApiKey?.length || 0,
-            apiKeyPrefix: railwayApiKey ? railwayApiKey.slice(0, 8) + '...' : 'N/A',
-          },
-        },
+        action: 'test-environments',
+        environments: {} as Record<string, unknown>,
         tests: [] as Record<string, unknown>[],
       };
       
       // Helper to test an environment
-      async function testEnvironment(envConfig: EnvConfig, envName: string, apiKey: string | undefined, privateKey: string | undefined) {
+      async function testEnvironment(envCfg: EnvConfig, envName: string) {
+        const { apiKey, privateKey } = getEnvCredentials(envCfg);
+        
+        (result.environments as Record<string, unknown>)[envName] = {
+          name: envCfg.name,
+          apiUrl: envCfg.apiUrl,
+          apiKeyConfigured: !!apiKey,
+          privateKeyConfigured: !!privateKey,
+          apiKeyLength: apiKey?.length || 0,
+          apiKeyPrefix: apiKey ? apiKey.slice(0, 8) + '...' : 'N/A',
+        };
+        
         if (!apiKey || !privateKey) {
           (result.tests as Record<string, unknown>[]).push({
             environment: envName,
@@ -1454,29 +1414,28 @@ serve(async (req) => {
         
         try {
           console.log(`[drgreen-proxy] Testing ${envName} GET /strains...`);
-          const response = await drGreenRequestGet("/strains", { take: 1, countryCode: 'ZAF' }, envName !== 'production', envConfig);
-          const body = await response.clone().text();
+          const resp = await drGreenRequestGet("/strains", { take: 1, countryCode: 'ZAF' }, envName !== 'production', envCfg);
+          const respBody = await resp.clone().text();
           
           (result.tests as Record<string, unknown>[]).push({
             environment: envName,
             endpoint: 'GET /strains',
-            status: response.status,
-            success: response.ok,
-            responsePreview: body.slice(0, 300),
+            status: resp.status,
+            success: resp.ok,
+            responsePreview: respBody.slice(0, 300),
           });
           
-          // If strains work, try clients endpoint
-          if (response.ok) {
+          if (resp.ok) {
             try {
               console.log(`[drgreen-proxy] Testing ${envName} GET /dapp/clients...`);
-              const clientsResponse = await drGreenRequestGet("/dapp/clients", { take: 1 }, envName !== 'production', envConfig);
-              const clientsBody = await clientsResponse.clone().text();
+              const clientsResp = await drGreenRequestGet("/dapp/clients", { take: 1 }, envName !== 'production', envCfg);
+              const clientsBody = await clientsResp.clone().text();
               
               (result.tests as Record<string, unknown>[]).push({
                 environment: envName,
                 endpoint: 'GET /dapp/clients',
-                status: clientsResponse.status,
-                success: clientsResponse.ok,
+                status: clientsResp.status,
+                success: clientsResp.ok,
                 responsePreview: clientsBody.slice(0, 300),
               });
             } catch (e) {
@@ -1498,10 +1457,10 @@ serve(async (req) => {
         }
       }
       
-      // Test all three environments
-      await testEnvironment(prodEnv, 'production', prodApiKey, prodPrivateKey);
-      await testEnvironment(stagingEnv, 'staging', stagingApiKey, stagingPrivateKey);
-      await testEnvironment(railwayEnv, 'railway', railwayApiKey, railwayPrivateKey);
+      // Test both environments
+      for (const [envName, envCfg] of Object.entries(ENV_CONFIG)) {
+        await testEnvironment(envCfg, envName);
+      }
       
       // Summary per environment
       const envSummary = (envName: string) => {
@@ -1516,18 +1475,11 @@ serve(async (req) => {
         };
       };
       
-      result.summary = {
-        production: envSummary('production'),
-        staging: envSummary('staging'),
-        railway: envSummary('railway'),
-        recommendation: (() => {
-          const railway = envSummary('railway');
-          const staging = envSummary('staging');
-          if (railway.strainsWorking) return 'Railway environment working! Use env: "railway" for dev testing.';
-          if (staging.strainsWorking) return 'Staging environment working! Use env: "staging" for testing.';
-          return 'Check credentials - neither staging nor railway environments responding.';
-        })(),
-      };
+      const summaries: Record<string, unknown> = {};
+      for (const envName of Object.keys(ENV_CONFIG)) {
+        summaries[envName] = envSummary(envName);
+      }
+      result.summary = summaries;
       
       return new Response(JSON.stringify(result, null, 2), { 
         status: 200, 
@@ -1855,16 +1807,13 @@ serve(async (req) => {
     // ROUTE PROCESSING
     // ==========================================
     
-    // Extract requested environment from body (supports production, staging, railway)
+    // Extract requested environment from body (supports production and railway)
     const requestedEnv = body?.env as string | undefined;
     const envConfig = getEnvironment(requestedEnv);
-    // Auto-route dApp admin reads AND write actions to production-write credentials
-    const adminEnvConfig = getWriteEnvironment(action, requestedEnv);
+    // All actions use the same credentials per environment — no separate write keys
+    const adminEnvConfig = envConfig; // Alias for backwards compatibility
     if (requestedEnv) {
       console.log(`[drgreen-proxy] Using environment: ${envConfig.name} (${requestedEnv})`);
-    }
-    if (adminEnvConfig !== envConfig) {
-      console.log(`[drgreen-proxy] Admin/write env override: ${adminEnvConfig.name} for action: ${action}`);
     }
     
     let response: Response;
@@ -2050,11 +1999,10 @@ serve(async (req) => {
         });
         
         // Use write-enabled credentials for client creation
-        const writeEnvConfig = getWriteEnvironment("create-client-legacy", body.environment);
-        console.log("[create-client-legacy] Using environment:", writeEnvConfig.name, `(${writeEnvConfig.apiKeyEnv})`);
+        console.log("[create-client-legacy] Using environment:", envConfig.name, `(${envConfig.apiKeyEnv})`);
         
         // Call API with detailed logging enabled
-        response = await drGreenRequestBody("/dapp/clients", "POST", dappPayload, true, writeEnvConfig);
+        response = await drGreenRequestBody("/dapp/clients", "POST", dappPayload, true, envConfig);
         
         // Log response details for debugging
         const clonedResp = response.clone();
@@ -2192,7 +2140,7 @@ serve(async (req) => {
         // Sign the JSON payload with secp256k1 using write credentials
         const signPayloadData = { cartId };
         const payloadStr = JSON.stringify(signPayloadData);
-        const writeEnv = adminEnvConfig || ENV_CONFIG['production-write'];
+        const writeEnv = envConfig;
         const { apiKey: writeApiKey, privateKey: writePrivKey } = getEnvCredentials(writeEnv);
         if (!writeApiKey || !writePrivKey) {
           throw new Error(`Write credentials not configured for remove-from-cart (${writeEnv.apiKeyEnv})`);
@@ -2598,10 +2546,8 @@ serve(async (req) => {
         };
         
         logInfo("Creating client with KYC payload");
-        // Use write-enabled credentials for client creation
-        const writeEnvConfig = getWriteEnvironment("create-client", body.environment);
-        logInfo(`Using write environment: ${writeEnvConfig.name} (${writeEnvConfig.apiKeyEnv})`);
-        response = await drGreenRequestBody("/dapp/clients", "POST", kycPayload, false, writeEnvConfig);
+        logInfo(`Using environment: ${envConfig.name} (${envConfig.apiKeyEnv})`);
+        response = await drGreenRequestBody("/dapp/clients", "POST", kycPayload, false, envConfig);
         break;
       }
       
@@ -3735,12 +3681,10 @@ serve(async (req) => {
         
         console.log("[admin-reregister-client] Calling Dr. Green API with payload for:", String(email).slice(0, 5) + '***');
         
-        // Use write-enabled credentials for client creation
-        const writeEnvConfig = getWriteEnvironment("admin-reregister-client", body.environment);
-        console.log("[admin-reregister-client] Using environment:", writeEnvConfig.name, `(${writeEnvConfig.apiKeyEnv})`);
+        console.log("[admin-reregister-client] Using environment:", envConfig.name, `(${envConfig.apiKeyEnv})`);
         
-        // Call the Dr. Green API to create the client under write-enabled key pair
-        response = await drGreenRequestBody("/dapp/clients", "POST", reregisterPayload, true, writeEnvConfig);
+        // Call the Dr. Green API to create the client under current env key pair
+        response = await drGreenRequestBody("/dapp/clients", "POST", reregisterPayload, true, envConfig);
         
         const clonedResp = response.clone();
         const respBody = await clonedResp.text();
@@ -3823,9 +3767,9 @@ serve(async (req) => {
           throw new Error("firstName and lastName are required");
         }
         
-        // Get the environment configuration - prefer write-enabled credentials for client creation
-        const envConfig = getWriteEnvironment("bootstrap-test-client", environment);
-        console.log("[bootstrap-test-client] Using environment:", envConfig.name, `(${envConfig.apiKeyEnv})`);
+        // Get the environment configuration
+        const bootstrapEnvConfig = getEnvironment(environment);
+        console.log("[bootstrap-test-client] Using environment:", bootstrapEnvConfig.name, `(${bootstrapEnvConfig.apiKeyEnv})`);
         console.log("[bootstrap-test-client] Creating client for:", String(email).slice(0, 5) + '***');
         
         const countryCodeMap: Record<string, string> = {
@@ -3872,7 +3816,7 @@ serve(async (req) => {
         };
         
         // Use the selected environment for the API call
-        response = await drGreenRequestBody("/dapp/clients", "POST", bootstrapPayload, true, envConfig);
+        response = await drGreenRequestBody("/dapp/clients", "POST", bootstrapPayload, true, bootstrapEnvConfig);
         
         const clonedResp = response.clone();
         const respBody = await clonedResp.text();
@@ -4325,8 +4269,7 @@ serve(async (req) => {
     logInfo(`Response status: ${response.status}`);
 
     if (response.status === 401 && ADMIN_ACTIONS.includes(action)) {
-      const usedEnv = DAPP_ADMIN_READ_ACTIONS.includes(action) || WRITE_ACTIONS.includes(action)
-        ? adminEnvConfig : envConfig;
+      const usedEnv = envConfig;
       return new Response(
         JSON.stringify({
           success: false,
