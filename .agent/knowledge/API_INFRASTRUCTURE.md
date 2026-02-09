@@ -142,22 +142,22 @@ The Dr. Green API enforces **strict NFT-scoped access**:
 
 | Property | Value |
 |----------|-------|
-| Algorithm | HMAC-SHA256 (symmetric) |
-| Key format | Base64-encoded raw bytes |
+| Algorithm | secp256k1 ECDSA (asymmetric) |
+| Key format | Base64-encoded PKCS#8 PEM (EC PRIVATE KEY) |
 | GET signing payload | Query string (e.g., `orderBy=desc&take=10`) |
 | POST signing payload | JSON body string |
-| API key header | `x-auth-apikey` — raw Base64, no processing |
-| Signature header | `x-auth-signature` — Base64 HMAC output |
+| API key header | `x-auth-apikey` — raw Base64 PEM, no processing |
+| Signature header | `x-auth-signature` — Base64 DER-encoded ECDSA signature |
 
-### Critical Rule: Do NOT Process API Keys
+### Critical Rule: Use secp256k1 ECDSA, NOT HMAC-SHA256
 
-The API key must be sent **exactly as stored** in secrets. Specifically:
+The Dr. Green API requires **secp256k1 ECDSA** signing. HMAC-SHA256 was incorrectly used
+and caused persistent 401 errors on all `/dapp/*` endpoints. The correct approach:
 
-- ❌ Do NOT use `extractPemBody()` or strip PEM headers
-- ❌ Do NOT trim, decode, or re-encode the key
-- ✅ Send the raw string value from `Deno.env.get("DRGREEN_API_KEY")`
-
-This was a root cause of persistent 401 errors. See the signing knowledge doc for details.
+- ✅ Use `generateSecp256k1Signature()` — extracts PKCS#8 private key bytes, signs with `secp256k1.sign()`
+- ✅ Output DER-formatted signature, Base64-encoded
+- ❌ Do NOT use `signWithHmac()` for API requests (HMAC only works for `/strains`, not `/dapp/*`)
+- ❌ Do NOT use `extractPemBody()` or strip PEM headers from the API key
 
 ---
 
