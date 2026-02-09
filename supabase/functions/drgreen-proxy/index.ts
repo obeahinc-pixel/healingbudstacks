@@ -378,6 +378,20 @@ const DAPP_ADMIN_READ_ACTIONS: string[] = [
   'admin-list-all-clients',
   'sync-client-status',
   'dapp-update-order',
+  // Client reads must use write credentials because clients are created under write NFT scope
+  'get-client',
+  'get-my-details',
+  'get-client-by-auth-email',
+  'get-cart',
+  'get-cart-legacy',
+  'get-order',
+  'get-orders',
+  'place-order',
+  'create-order',
+  'add-to-cart',
+  'remove-from-cart',
+  'empty-cart',
+  'update-shipping-address',
 ];
 
 const ENV_CONFIG: Record<string, EnvConfig> = {
@@ -2678,9 +2692,8 @@ serve(async (req) => {
         if (!validateClientId(body.clientId)) {
           throw new Error("Invalid client ID format");
         }
-        // Method A - Body Sign: signs {"clientId": "..."}
-        const signBody = { clientId: body.clientId };
-        response = await drGreenRequestBody(`/clients/${body.clientId}`, "GET", signBody);
+        // GET request - use query string signing with write credentials (NFT-scoped)
+        response = await drGreenRequestQuery(`/dapp/clients/${body.clientId}`, {}, false, adminEnvConfig);
         break;
       }
       
