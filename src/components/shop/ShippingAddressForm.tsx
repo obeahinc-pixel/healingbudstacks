@@ -101,6 +101,8 @@ interface ShippingAddressFormProps {
   onCancel?: () => void;
   variant?: 'card' | 'inline';
   submitLabel?: string;
+  /** When true, uses the admin proxy action to update address (bypasses ownership check) */
+  isAdmin?: boolean;
 }
 
 export function ShippingAddressForm({
@@ -111,11 +113,12 @@ export function ShippingAddressForm({
   onCancel,
   variant = 'card',
   submitLabel = 'Save Address',
+  isAdmin = false,
 }: ShippingAddressFormProps) {
   const [isSaving, setIsSaving] = useState(false);
   const [saveSuccess, setSaveSuccess] = useState(false);
   const { toast } = useToast();
-  const { updateShippingAddress } = useDrGreenApi();
+  const { updateShippingAddress, adminUpdateShippingAddress } = useDrGreenApi();
 
   // Determine initial country from address or default
   const initialCountry = initialAddress?.countryCode
@@ -158,8 +161,10 @@ export function ShippingAddressForm({
       };
 
       // Try to update address in Dr. Green API (optional - don't block on failure)
+      // Use admin proxy action when isAdmin=true to bypass ownership checks
       try {
-        const result = await updateShippingAddress(clientId, shippingData);
+        const updateFn = isAdmin ? adminUpdateShippingAddress : updateShippingAddress;
+        const result = await updateFn(clientId, shippingData);
         if (result.error) {
           console.warn('Could not sync address to Dr. Green API:', result.error);
           // Continue anyway - address will be included in order payload
