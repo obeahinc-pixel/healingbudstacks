@@ -59,17 +59,17 @@ interface NavItem {
 
 const navItems: NavItem[] = [
   { to: "/admin", label: "Dashboard", icon: LayoutDashboard },
+  { to: "/admin/clients", label: "Clients", icon: Users },
   { to: "/admin/orders", label: "Orders", icon: ShoppingCart },
   { to: "/admin/prescriptions", label: "Prescriptions", icon: FileText },
   { to: "/admin/strains", label: "Strains", icon: Leaf },
   { to: "/admin/strain-sync", label: "Strain Sync", icon: RefreshCw },
-  { to: "/admin/strain-knowledge", label: "Knowledge Base", icon: Database },
-  { to: "/admin/roles", label: "User Roles", icon: Users },
-  { to: "/admin/wallet-mappings", label: "Wallet Mappings", icon: Wallet },
 ];
 
 const secondaryNavItems: NavItem[] = [
-  { to: "/debug", label: "Debug Panel", icon: Bug },
+  { to: "/admin/roles", label: "User Roles", icon: Shield },
+  { to: "/admin/wallet-mappings", label: "Wallet Mappings", icon: Wallet },
+  { to: "/admin/tools", label: "Developer Tools", icon: Bug },
 ];
 
 const AdminLayout = ({ children, title, description }: AdminLayoutProps) => {
