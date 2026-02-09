@@ -300,9 +300,9 @@ export function AdminClientManager() {
     try {
       const result = await getDappClientDetails(clientId);
       
-      // Extract shipping from nested API response
-      const responseData = result.data as unknown as { data?: { shipping?: ShippingAddress } };
-      const shipping = responseData?.data?.shipping || (result.data as { shipping?: ShippingAddress })?.shipping || null;
+      // Extract shipping from nested API response (API returns `shippings` array)
+      const responseData = result.data as unknown as { data?: { shippings?: ShippingAddress[] } };
+      const shipping = responseData?.data?.shippings?.[0] || (result.data as { shippings?: ShippingAddress[] })?.shippings?.[0] || null;
       
       setClientAddresses(prev => ({ ...prev, [clientId]: shipping }));
       
