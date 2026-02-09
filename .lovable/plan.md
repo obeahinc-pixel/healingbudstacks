@@ -1,36 +1,48 @@
 
-
-# Fix Currency Display on Orders Page
+# Fix: Normalize `shippings` Array in drgreen-proxy
 
 ## Problem
+The Dr. Green API returns shipping addresses as a `shippings` array (e.g., `"shippings": [{"address1": "123 Main St", ...}]`), but the frontend expects a singular `shipping` object (e.g., `result.data?.shipping?.address1`). This causes shipping addresses to silently fail to load on the Checkout and Patient Dashboard pages.
 
-Line 125 of `src/components/shop/OrdersTable.tsx` hardcodes the Euro symbol:
-```
-€{order.total_amount.toFixed(2)}
-```
-
-Orders already store `currency` (e.g. "ZAR", "EUR", "GBP") and `country_code` (e.g. "ZA", "PT", "GB") from checkout. These fields are just not being used for display.
+The local fallback path already returns `shipping` (singular) correctly — the bug only occurs when the live API response is used.
 
 ## Fix
 
-### `src/components/shop/OrdersTable.tsx`
+**File**: `supabase/functions/drgreen-proxy/index.ts`
 
-1. Import `formatPrice` from `src/lib/currency.ts`
-2. Add `currency` and `country_code` to the `Order` interface
-3. Replace the hardcoded `€{order.total_amount.toFixed(2)}` with:
-   ```
-   formatPrice(order.total_amount, order.country_code || 'ZA')
-   ```
-   This uses the existing currency utility which handles locale-aware formatting with the correct symbol (R for ZAR, GBP for pounds, EUR for euros, etc.)
+### Change 1: Normalize in `get-my-details` (line ~2376)
+Before returning API data, add normalization:
+```typescript
+if (apiData) {
+  // Normalize shippings array to shipping object
+  if (Array.isArray(apiData.shippings) && apiData.shippings.length > 0) {
+    apiData.shipping = apiData.shippings[0];
+  }
+  return new Response(JSON.stringify(apiData), { ... });
+}
+```
 
-4. Also format the `unit_price` if shown anywhere in expanded order details
-
-### Fallback behavior
-
-- If `country_code` is missing/null on older orders, defaults to `'ZA'` (South African Rand) since Dr. Green API uses ZAR as base currency
-- The `formatPrice` function already handles invalid/missing country codes gracefully
+### Change 2: Normalize in `get-client` (line ~2654)
+After the API response is received, parse and normalize before returning:
+```typescript
+case "get-client": {
+  // ... existing validation and fetch ...
+  // After getting response, normalize shippings array
+  if (response && response.ok) {
+    const clientData = await response.json();
+    if (Array.isArray(clientData.shippings) && clientData.shippings.length > 0) {
+      clientData.shipping = clientData.shippings[0];
+    }
+    return new Response(JSON.stringify(clientData), {
+      status: 200,
+      headers: { ...corsHeaders, "Content-Type": "application/json" },
+    });
+  }
+  break;
+}
+```
 
 ## Scope
-
-One file changed: `src/components/shop/OrdersTable.tsx` -- approximately 3 lines modified.
-
+- One file modified: `supabase/functions/drgreen-proxy/index.ts`
+- Two cases updated: `get-my-details` and `get-client`
+- No frontend changes needed — the frontend already expects `shipping` (singular)
