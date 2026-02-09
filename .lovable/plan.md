@@ -1,105 +1,53 @@
 
 
-# Admin Portal: Environment Switcher & API Settings
+# Fix: RainbowKit + Wagmi Dependency Conflict
 
-## Overview
+## Problem
 
-Move the environment selector into the AdminLayout header bar (visible on every admin page) and add a new Admin Settings page where credentials and API URLs can be viewed and edited per environment.
+`@rainbow-me/rainbowkit@2.2.10` requires `wagmi@^2.9.0` as a peer dependency, but the project has `wagmi@^3.1.3` installed. RainbowKit v2 does **not** support wagmi v3 -- the upstream PR for wagmi v3 compatibility (#2591) is stalled and not merged.
+
+## Recommended Approach: Downgrade wagmi to 2.x
+
+This is the safest option. The wallet features in this project (NFT ownership checks, wallet connect modal) do not use any wagmi v3-specific APIs.
 
 ## Changes
 
-### 1. Move EnvironmentSelector into AdminLayout header
+### 1. Update `package.json` versions
 
-**File: `src/layout/AdminLayout.tsx`**
-- Import `EnvironmentSelector` and add it to the page header bar (the `border-b border-border bg-card/50` section at line ~398)
-- Place it inline with the page title, aligned right
-- Also add it to the mobile header bar
-- When sidebar is collapsed, the selector remains visible in the main content header
+| Package | Current | Target |
+|---------|---------|--------|
+| `wagmi` | `^3.1.3` | `^2.14.0` |
+| `viem` | `^2.43.4` | `^2.43.4` (no change needed) |
+| `@rainbow-me/rainbowkit` | `^2.2.10` | `^2.2.10` (no change needed) |
+| `@tanstack/react-query` | `^5.90.16` | `^5.90.16` (no change needed) |
 
-**File: `src/pages/AdminDashboard.tsx`**
-- Remove the standalone `EnvironmentSelector` from the dashboard body (line ~290) since it now lives in the layout
-- Remove the `useApiEnvironment` import if no longer used directly (it is still used for `environmentLabel` in the description -- keep that)
+Only `wagmi` needs to change. `viem` v2 is compatible with both wagmi v2 and v3.
 
-### 2. Create Admin Settings page
+### 2. Check for wagmi v3-only API usage
 
-**New file: `src/pages/AdminSettings.tsx`**
+Review all files importing from `wagmi` to ensure no v3-only APIs are used:
 
-A settings page wrapped in `AdminLayout` with:
-- **Active Environment indicator** -- shows which environment is selected (Production / Railway) with a colored badge
-- **Environment Configuration cards** -- one card per environment showing:
-  - API Base URL (editable input)
-  - API Key (masked, editable)
-  - Private Key (masked, editable)
-  - A "Test Connection" button that calls the `health-check` action via the proxy
-  - Status indicator (connected/disconnected based on last test)
-- **Save** persists changes to the backend (stored in a `api_environment_config` table)
-- **Note**: For the final production release, only one environment will be active. Railway is for testing.
+- `src/providers/WalletProvider.tsx` -- uses `WagmiProvider`, `http` from wagmi and `getDefaultConfig` from RainbowKit. All compatible with wagmi v2.
+- `src/hooks/useNFTOwnership.ts` -- uses `useAccount`, `useReadContract`. These exist in wagmi v2.
+- `src/components/WalletConnectionModal.tsx` -- uses `useAccount`, `useDisconnect`, `useBalance`, `useChainId`, `useSwitchChain`. All available in wagmi v2.
+- `src/context/WalletContext.tsx` -- uses `useAccount`. Compatible.
+- `src/hooks/useWalletAuth.ts` -- needs review but likely uses standard hooks.
 
-### 3. Add Settings nav item to AdminLayout
+No code changes expected -- just the version pin in `package.json`.
 
-**File: `src/layout/AdminLayout.tsx`**
-- Add `{ to: "/admin/settings", label: "Settings", icon: Settings }` to `secondaryNavItems`
-- The `Settings` icon is already imported but unused -- use it
+### 3. Remove `@metamask/sdk` if unused directly
 
-### 4. Add route
+`@metamask/sdk@^0.34.0` is listed as a direct dependency. RainbowKit already bundles MetaMask connector support. If nothing imports `@metamask/sdk` directly, it can be removed to reduce conflicts. This will be verified before removal.
 
-**File: `src/App.tsx`**
-- Add `<Route path="/admin/settings" element={<AdminSettings />} />`
-- Import the new page component
+## Why not the other options?
 
-### 5. Database table for environment config (optional enhancement)
+- **Force install (`--legacy-peer-deps`)**: Risks runtime crashes if wagmi v3 changed internal APIs that RainbowKit calls.
+- **Remove RainbowKit**: Would require rewriting the entire wallet connection UI (modal, connectors, chain switching) from scratch. Not worth it.
+- **Upgrade RainbowKit to support wagmi v3**: No official release exists yet. Using an unofficial fork introduces maintenance risk.
 
-Create a `api_environment_config` table to persist custom API URLs/keys per environment so admins can update credentials without redeploying secrets. Fields:
-- `id` (uuid, PK)
-- `environment` (text, unique -- 'production' or 'railway')
-- `api_url` (text)
-- `api_key_hint` (text -- last 4 chars only, for display)
-- `updated_at` (timestamptz)
-- `updated_by` (uuid, FK to profiles)
+## Files to modify
 
-RLS: Only admins can read/write.
-
-Actual secret values remain in backend secrets -- the settings page shows hints and allows testing, but full key replacement would still go through the secrets management flow.
-
-## Technical Details
-
-### EnvironmentSelector placement in AdminLayout header
-
-The selector will be added to the existing page header section (line ~398-408), positioned to the right of the title using flex:
-
-```text
-+----------------------------------------------+
-| Dashboard                  [Env: Production v]|
-| Live overview - Production                    |
-+----------------------------------------------+
-```
-
-### AdminSettings page structure
-
-```text
-+------------------+----------------------------+
-| Sidebar          | Settings                   |
-|                  |                            |
-|                  | [Active: Production]       |
-|                  |                            |
-|                  | -- Production -----------  |
-|                  | URL: https://app.drgreen.. |
-|                  | Key: ****3xF2              |
-|                  | [Test Connection] [OK]     |
-|                  |                            |
-|                  | -- Railway (Dev) --------  |
-|                  | URL: https://railway.app.. |
-|                  | Key: ****9aB1              |
-|                  | [Test Connection] [--]     |
-+------------------+----------------------------+
-```
-
-### Files summary
-
-| File | Action |
+| File | Change |
 |------|--------|
-| `src/layout/AdminLayout.tsx` | Add EnvironmentSelector to header, add Settings nav item |
-| `src/pages/AdminDashboard.tsx` | Remove duplicate EnvironmentSelector from body |
-| `src/pages/AdminSettings.tsx` | New page -- environment config and connection testing |
-| `src/App.tsx` | Add `/admin/settings` route |
+| `package.json` | Change `wagmi` from `^3.1.3` to `^2.14.0` |
 
