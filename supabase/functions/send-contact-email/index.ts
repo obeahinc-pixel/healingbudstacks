@@ -190,7 +190,7 @@ const handler = async (req: Request): Promise<Response> => {
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({
-        from: "Healing Buds <onboarding@resend.dev>",
+        from: "Healing Buds <noreply@healingbuds.co.za>",
         to: [email.trim()],
         subject: "Thank you for contacting Healing Buds",
         html: emailHtml,

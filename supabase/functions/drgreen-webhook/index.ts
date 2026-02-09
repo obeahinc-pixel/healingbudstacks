@@ -248,7 +248,7 @@ async function sendEmail(to: string, subject: string, html: string, config: type
 
   try {
     // Use verified domain or fallback to resend.dev
-    const fromAddress = `${config.brandName} <onboarding@resend.dev>`;
+    const fromAddress = `${config.brandName} <noreply@healingbuds.co.za>`;
 
     const response = await fetch('https://api.resend.com/emails', {
       method: 'POST',

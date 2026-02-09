@@ -211,7 +211,7 @@ const handler = async (req: Request): Promise<Response> => {
         "Content-Type": "application/json",
       },
       body: JSON.stringify({
-        from: `${config.brandName} <onboarding@resend.dev>`,
+        from: `${config.brandName} <noreply@healingbuds.co.za>`,
         to: [request.email.trim()],
         subject,
         html,
