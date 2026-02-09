@@ -50,9 +50,11 @@ const AdminStrains = lazy(() => import("./pages/AdminStrains"));
 const AdminStrainSync = lazy(() => import("./pages/AdminStrainSync"));
 const AdminStrainKnowledge = lazy(() => import("./pages/AdminStrainKnowledge"));
 const AdminDashboard = lazy(() => import("./pages/AdminDashboard"));
+const AdminClients = lazy(() => import("./pages/AdminClients"));
 const AdminRoles = lazy(() => import("./pages/AdminRoles"));
 const AdminOrders = lazy(() => import("./pages/AdminOrders"));
 const AdminWalletMappings = lazy(() => import("./pages/AdminWalletMappings"));
+const AdminTools = lazy(() => import("./pages/AdminTools"));
 const Research = lazy(() => import("./pages/Research"));
 const TheWire = lazy(() => import("./pages/TheWire"));
 const ArticleDetail = lazy(() => import("./pages/ArticleDetail"));
@@ -111,6 +113,7 @@ const AnimatedRoutes = () => {
           
           {/* Admin Routes - Protected by AdminLayout (which uses useUserRole) */}
           <Route path="/admin" element={<AdminDashboard />} />
+          <Route path="/admin/clients" element={<AdminClients />} />
           <Route path="/admin/orders" element={<AdminOrders />} />
           <Route path="/admin/prescriptions" element={<AdminPrescriptions />} />
           <Route path="/admin/strains" element={<AdminStrains />} />
@@ -118,6 +121,7 @@ const AnimatedRoutes = () => {
           <Route path="/admin/strain-knowledge" element={<AdminStrainKnowledge />} />
           <Route path="/admin/roles" element={<AdminRoles />} />
           <Route path="/admin/wallet-mappings" element={<AdminWalletMappings />} />
+          <Route path="/admin/tools" element={<AdminTools />} />
           
           
           {/* Legal */}
