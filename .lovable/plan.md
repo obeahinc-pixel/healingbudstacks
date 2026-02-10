@@ -1,97 +1,81 @@
 
-# Fix: Ensure Clients Are Visible and API Connections Are Healthy
 
-## Current State (Verified)
+# Live Order Status Sync from Dr. Green DApp API
 
-### What's Working
-- API health check returns `healthy` (credentials valid, API reachable, 491ms latency)
-- `DRGREEN_API_KEY` and `DRGREEN_PRIVATE_KEY` secrets are configured
-- Signing logic correctly uses secp256k1 ECDSA with proper PEM detection and DER extraction
-- GET endpoints (`dapp-clients`, `get-clients-summary`) correctly use `drGreenRequestQuery` (query-string signing)
-- Both `kayliegh.sm@gmail.com` and `scott.k1@outlook.com` exist as auth users in the database
+## Problem
 
-### What's Failing
-- **Every recent proxy request returns 401 "Authentication required"** -- the proxy logs show "Unauthenticated request to dapp-clients" and "Unauthenticated request to get-clients-summary"
-- This means the admin is **not logged into Supabase auth** when visiting the admin pages, so the JWT is missing from requests
-- The `drgreen_clients` table is **empty** -- no local client records exist at all
-- Only `scott@healingbuds.global` has the admin role; neither `kayliegh.sm@gmail.com` nor `scott.k1@outlook.com` have admin
+The patient order history page (`/orders`) reads exclusively from the local `drgreen_orders` database table. When the Dr. Green DApp updates an order's status (e.g., dispatched, payment confirmed), the local table is never updated -- patients see stale data.
 
-## Root Cause
+The `getOrders(clientId)` function already exists in `useDrGreenApi` but is never called by the patient-facing `useOrderTracking` hook.
 
-The proxy requires a valid Supabase JWT for admin endpoints. The `supabase.functions.invoke` call in `useDrGreenApi` automatically attaches the JWT **only if the user has an active Supabase session**. If the user visits `/admin/clients` without being logged in, every admin API call fails silently with 401.
+## Solution
 
-The two client emails need to be pulled from the Dr. Green DApp API (they may already be registered there via the DApp directly). Once an admin is logged in and visits the client manager, the API call to `/dapp/clients` should return them.
-
-## Changes Required
-
-### 1. Auto-redirect to login if not authenticated on admin pages
-**File: `src/layout/AdminLayout.tsx`**
-
-Add an auth check: if no active Supabase session exists, redirect to `/auth` with a return URL. This prevents the confusing "0 clients" state when the admin simply isn't logged in.
+Modify `useOrderTracking` to fetch live order statuses from the Dr. Green API on page load and sync any changes back into the local table. This keeps the local cache accurate while always showing the latest DApp state.
 
 ```text
-Flow:
-  User visits /admin/clients
-    -> AdminLayout checks session
-    -> No session? Redirect to /auth?redirect=/admin/clients
-    -> After login, redirect back to admin page
-    -> JWT is now attached to all proxy calls
-    -> Clients load from Dr. Green API
+Current flow:
+  Patient visits /orders
+    -> Read local drgreen_orders table
+    -> Show cached statuses (potentially stale)
+
+New flow:
+  Patient visits /orders
+    -> Read local drgreen_orders table (instant UI)
+    -> Fetch live orders from Dr. Green API via get-orders
+    -> Compare statuses, update any that changed
+    -> Sync updated statuses back to local DB
+    -> Show toast notification for any changes detected
 ```
 
-### 2. Sync Dr. Green API clients to local database on admin fetch
-**File: `src/components/admin/AdminClientManager.tsx`**
+## Changes
 
-After successfully fetching clients from the Dr. Green API, upsert them into the local `drgreen_clients` table. This ensures the local cache stays populated for ownership checks and ShopContext lookups. Currently the local table is empty because no one has gone through the onboarding flow on Healing Buds -- all clients were registered directly on the DApp.
+### 1. Update `useOrderTracking` hook
+**File: `src/hooks/useOrderTracking.ts`**
 
-Changes:
-- After `clientsResult` returns successfully, iterate over the client list
-- For each client, upsert into `drgreen_clients` with `drgreen_client_id`, `email`, `full_name`, `is_kyc_verified`, `admin_approval`, `country_code`
-- Match existing auth users by email to set the `user_id` foreign key
-- This is a background sync -- it should not block the UI
+- Import and use `useDrGreenApi` (already available in the project)
+- Access the `drGreenClient` from `ShopContext` to get the `drgreen_client_id` needed for the API call
+- After loading local orders, call `getOrders(clientId)` to fetch live statuses from the DApp
+- For each local order, compare `status` and `payment_status` against the live API response
+- If any differ, update the local `drgreen_orders` row and show a toast
+- This runs once on mount and can be triggered via `refreshOrders`
 
-### 3. Map auth users to their Dr. Green client IDs on login
-**File: `src/context/ShopContext.tsx`**
+### 2. Add a "Last synced" indicator and manual refresh
+**File: `src/pages/Orders.tsx`**
 
-When a user logs in, after the auth state change, check if their email matches a `drgreen_clients` record. If not, try to find them via the Dr. Green API (search by email). If found, create the local mapping so the user can access their client data, cart, and orders.
+- Show a subtle "Last synced: X seconds ago" timestamp near the page header
+- Add a refresh button next to it so patients can manually trigger a live sync
+- Show a brief loading spinner during the sync without replacing the existing order list
 
-Changes:
-- In the `onAuthStateChange` handler, after successful login:
-  - Check `drgreen_clients` for a record matching the user's email
-  - If not found, call `drgreen-proxy` with action `dapp-clients` and `search` param set to the user's email
-  - If a match is found, insert a new `drgreen_clients` record linking the auth user to the Dr. Green client ID
-  - This auto-maps `kayliegh.sm@gmail.com` and `scott.k1@outlook.com` to their Dr. Green records on next login
+### 3. Add periodic background sync
+**File: `src/hooks/useOrderTracking.ts`**
 
-### 4. Clean up stale credential secrets
-**No code change -- informational**
-
-The secrets `DRGREEN_WRITE_API_KEY`, `DRGREEN_WRITE_PRIVATE_KEY`, `DRGREEN_ALT_API_KEY`, and `DRGREEN_ALT_PRIVATE_KEY` are legacy and unused. The architecture uses a single credential set per environment. These could be removed to reduce confusion, but are not causing any issues.
+- Set up a 60-second polling interval (matching the verification polling pattern already used in ShopContext)
+- Only poll when the Orders page is mounted (cleanup on unmount)
+- Skip polling if no orders exist or no client ID is available
 
 ## Technical Details
 
-### Key Conversion (Verified Correct)
-The current key conversion pipeline:
-1. Base64-decode the stored secret
-2. Detect PEM format (handles truncated headers like `---\n`)
-3. Extract Base64 body from PEM, decode to DER bytes
-4. Check for secp256k1 OID (`2b8104000a`) in the DER
-5. Parse PKCS#8 or SEC1 structure to extract the raw 32-byte private key
-6. Sign with `@noble/secp256k1` using SHA-256 hash
-7. Convert compact signature (r||s) to DER format
-8. Return Base64-encoded DER signature
-
-This matches the Dr. Green API's expected signing method. The health check confirms it works.
-
-### API Connection (Verified Healthy)
+### API Endpoint Used
 ```text
-Status: healthy
-Credentials: ok (API credentials configured)
-Connectivity: ok (API reachable, 491ms)
+GET /dapp/orders (via drgreen-proxy action: 'get-orders')
+Params: { clientId: string }
+Returns: Array of { orderId, status, totalAmount, createdAt, paymentStatus }
 ```
 
-## Expected Outcome
-- Admin pages redirect to login if session is missing
-- After admin login, `/admin/clients` loads both `kayliegh.sm@gmail.com` and `scott.k1@outlook.com` from the Dr. Green API
-- Client records are synced to local `drgreen_clients` table for future lookups
-- When `kayliegh.sm@gmail.com` or `scott.k1@outlook.com` log in, they are auto-mapped to their Dr. Green client ID
-- All verification status, KYC, and admin approval reflect live DApp data
+### Matching Logic
+- Match live API orders to local orders by `drgreen_order_id === orderId`
+- Only update local rows where `status` or `payment_status` has changed
+- Orders that exist in the API but not locally (e.g., placed via DApp directly) will be inserted as new local records
+- Local-only orders (prefixed `LOCAL-`) are skipped during sync since they have no DApp counterpart
+
+### Status Change Notifications
+When a status changes during sync:
+- Toast: "Order #XXXXXXXX status updated to [new status]"
+- The realtime subscription already handles future local DB changes, so the sync completes the loop
+
+### No Breaking Changes
+- The existing realtime subscription remains active for instant updates from webhook-triggered DB changes
+- The local DB read happens first for instant UI, then the live sync overlays any changes
+- `saveOrder` and `updateOrderStatus` remain unchanged
+- The `reorder` function continues to work from local data
+
