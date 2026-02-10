@@ -1,126 +1,78 @@
 
 
-## Fix White Screen on cPanel Export + Admin Email Management Panel
+## Fix: Client Auto-Sync and Missing Profile Records
 
-This plan addresses two separate issues:
+### Root Cause Analysis
 
-### Issue 1: White Screen on cPanel Deployment (Permanent Fix)
+**1. Profiles table is empty** -- The `handle_new_user()` function exists in the database but has **no trigger attached to `auth.users`**. The trigger `on_auth_user_created` was never created (or was dropped). Only the admin-role trigger (`on_auth_user_created_admin`) exists. This means when users sign up, no profile row is created.
 
-**Root Cause (from screenshot):**
-The cPanel server is serving `.css` and `.js` files with MIME type `text/html` instead of their correct types. This happens because:
+**2. `drgreen_clients` table is empty** -- Because there are no profiles AND no users have completed the onboarding flow yet, no client records exist locally. The auto-discovery in `ShopContext` runs on login but it requires the user's email to match an existing Dr. Green API client. If no client was ever registered on Dr. Green under these emails, auto-discovery returns nothing.
 
-1. `vite.config.ts` has `base: "/"` (absolute paths) -- when deployed to cPanel, the server cannot resolve `/assets/index-xxx.css` and falls through to the SPA rewrite rule, which returns `index.html` for everything (including CSS/JS files).
-2. The `.htaccess` SPA rewrite catches asset requests because the files may not exist at the expected absolute paths, or cPanel/LiteSpeed doesn't serve the correct MIME types.
+**3. API health is GOOD** -- The health check confirms:
+- Credentials: configured and valid
+- API connectivity: reachable (493ms response)
+- Status: healthy
 
-**Fix (3 changes):**
+**4. The 3 accounts exist in auth.users** but have zero associated data:
+- `scott.k1@outlook.com` (d6f38c88)
+- `kayliegh.sm@gmail.com` (713e6603)
+- `scott@healingbuds.global` (b8fbc92e)
 
-1. **`vite.config.ts`** -- Change `base: "/"` to `base: "./"` so all asset references use relative paths (`./assets/...` instead of `/assets/...`). This ensures the browser resolves assets relative to `index.html` regardless of deployment location.
+### Fix Plan
 
-2. **`public/.htaccess`** -- Add explicit MIME type declarations BEFORE the rewrite rules, and add asset file extension exclusions to the rewrite condition. This ensures `.css`, `.js`, `.woff2`, etc. are never caught by the SPA fallback:
+#### Step 1: Create the missing `on_auth_user_created` trigger
 
-```text
-# Force correct MIME types (prevents text/html for assets)
-AddType text/css .css
-AddType application/javascript .js .mjs
-AddType application/json .json
-AddType image/svg+xml .svg
-AddType font/woff2 .woff2
-AddType font/woff .woff
-
-# SPA rewrite -- skip files with known extensions
-RewriteCond %{REQUEST_FILENAME} !-f
-RewriteCond %{REQUEST_FILENAME} !-d
-RewriteCond %{REQUEST_URI} !\.(css|js|mjs|json|png|jpg|jpeg|gif|svg|ico|woff|woff2|ttf|eot|map|webp|mp4)$
-RewriteRule ^ index.html [QSA,L]
-```
-
-3. **`index.html`** -- Remove the Geist font CSS reference (`/fonts/geist.css`) since cPanel may not serve it correctly, and load it inline or via a CDN fallback.
-
----
-
-### Issue 2: Admin Email Management Panel
-
-**What:** A new admin page at `/admin/emails` with three tabs:
-
-**Tab 1: Email Log (View All Sent Emails)**
-- Database table `email_logs` to record every email sent
-- Columns: id, recipient, subject, email_type, status (sent/failed), error_message, sent_at, template_used, metadata
-- All 6 edge functions updated to log sends to this table
-- Table view with search, filter by type, filter by status, date range
-- Click row to see full HTML preview in a dialog
-- "Resend" button per row to re-trigger the same email
-
-**Tab 2: Email Templates**
-- Database table `email_templates` to store custom templates
-- Columns: id, name, slug, subject, html_body, variables (jsonb), is_active, created_at, updated_at
-- Pre-seed with the 6 existing template types (welcome, kyc-link, kyc-approved, kyc-rejected, eligibility-approved, eligibility-rejected)
-- Template editor with:
-  - Name, subject line, HTML body (textarea with monospace font)
-  - Variable placeholders shown (e.g. `{{firstName}}`, `{{kycLink}}`)
-  - "Load Default" button to reset to built-in template
-  - "Preview" button to render HTML in an iframe
-  - Save/Update functionality
-
-**Tab 3: Send Test Email**
-- Enhance existing `AdminEmailTrigger` component
-- Add "Send Test" option that sends to a manually entered email address (not just existing clients)
-
----
-
-### Technical Details
-
-#### Database Changes (2 new tables):
+A database migration to attach `handle_new_user()` to `auth.users` so profile rows are auto-created on signup:
 
 ```sql
--- Email send log
-CREATE TABLE public.email_logs (
-  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  recipient TEXT NOT NULL,
-  subject TEXT NOT NULL,
-  email_type TEXT NOT NULL,
-  status TEXT NOT NULL DEFAULT 'sent',
-  error_message TEXT,
-  html_body TEXT,
-  metadata JSONB DEFAULT '{}',
-  template_slug TEXT,
-  sent_at TIMESTAMPTZ DEFAULT now(),
-  created_at TIMESTAMPTZ DEFAULT now()
-);
-
--- Email templates
-CREATE TABLE public.email_templates (
-  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  name TEXT NOT NULL,
-  slug TEXT UNIQUE NOT NULL,
-  subject TEXT NOT NULL,
-  html_body TEXT NOT NULL,
-  variables JSONB DEFAULT '[]',
-  is_active BOOLEAN DEFAULT true,
-  created_at TIMESTAMPTZ DEFAULT now(),
-  updated_at TIMESTAMPTZ DEFAULT now()
-);
-
--- RLS: admin-only access for both tables
-ALTER TABLE public.email_logs ENABLE ROW LEVEL SECURITY;
-ALTER TABLE public.email_templates ENABLE ROW LEVEL SECURITY;
--- Policies using the existing admin role check pattern
+CREATE TRIGGER on_auth_user_created
+  AFTER INSERT ON auth.users
+  FOR EACH ROW EXECUTE FUNCTION public.handle_new_user();
 ```
 
-#### Files to Create:
-1. `src/pages/AdminEmails.tsx` -- Main admin email page with 3 tabs
-2. `src/components/admin/EmailLogViewer.tsx` -- Email log table with search, filters, resend, preview
-3. `src/components/admin/EmailTemplateEditor.tsx` -- Template CRUD with HTML preview
+#### Step 2: Backfill profiles for the 3 existing accounts
 
-#### Files to Modify:
-1. `vite.config.ts` -- Change `base: "/"` to `base: "./"`
-2. `public/.htaccess` -- Add MIME types and asset exclusion in rewrite rules
-3. `index.html` -- Fix geist.css reference
-4. `src/App.tsx` -- Add `/admin/emails` route
-5. `src/layout/AdminLayout.tsx` -- Add "Emails" nav item with Mail icon
-6. `supabase/functions/send-client-email/index.ts` -- Log sends to `email_logs` table
-7. `supabase/functions/send-contact-email/index.ts` -- Log sends to `email_logs` table
-8. `supabase/functions/send-onboarding-email/index.ts` -- Log sends to `email_logs` table
-9. `supabase/functions/send-order-confirmation/index.ts` -- Log sends to `email_logs` table
-10. `supabase/functions/send-dispatch-email/index.ts` -- Log sends to `email_logs` table
-11. `supabase/functions/drgreen-webhook/index.ts` -- Log sends to `email_logs` table
+Since the trigger wasn't there when these accounts were created, manually insert profile rows:
+
+```sql
+INSERT INTO public.profiles (id, full_name)
+SELECT id, COALESCE(raw_user_meta_data->>'full_name', split_part(email, '@', 1))
+FROM auth.users
+WHERE id NOT IN (SELECT id FROM public.profiles)
+ON CONFLICT (id) DO NOTHING;
+```
+
+#### Step 3: Assign admin role to scott@healingbuds.global
+
+The `auto_assign_admin_role` trigger checks for this email, but since it fires on INSERT and the account was created via the edge function (which may bypass the trigger), verify and fix:
+
+```sql
+INSERT INTO public.user_roles (user_id, role)
+SELECT id, 'admin'::app_role FROM auth.users
+WHERE email = 'scott@healingbuds.global'
+ON CONFLICT (user_id, role) DO NOTHING;
+```
+
+#### Step 4: Test Dr. Green API client lookup for each email
+
+After profiles exist and users can log in, the `ShopContext.fetchClient()` flow will:
+1. Check `drgreen_clients` table (empty -- no match)
+2. Call `get-client-by-auth-email` on the Dr. Green API
+3. If found, auto-link the client record locally
+
+If the emails don't exist as Dr. Green DApp clients yet, users will need to complete the onboarding/registration flow to create their Dr. Green client record.
+
+### Files to Modify
+
+| File | Change |
+|------|--------|
+| Database migration | Create `on_auth_user_created` trigger, backfill profiles, ensure admin role |
+
+### What This Fixes
+
+- New signups will auto-create profile rows (was broken)
+- Existing 3 accounts get profile records immediately
+- scott@healingbuds.global gets admin access
+- Auto-sync on login will work once Dr. Green client records exist for these emails
+- No code changes needed -- the `ShopContext` auto-discovery logic is already correct
 
