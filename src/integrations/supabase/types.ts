@@ -245,6 +245,84 @@ export type Database = {
         }
         Relationships: []
       }
+      email_logs: {
+        Row: {
+          created_at: string | null
+          email_type: string
+          error_message: string | null
+          html_body: string | null
+          id: string
+          metadata: Json | null
+          recipient: string
+          sent_at: string | null
+          status: string
+          subject: string
+          template_slug: string | null
+        }
+        Insert: {
+          created_at?: string | null
+          email_type: string
+          error_message?: string | null
+          html_body?: string | null
+          id?: string
+          metadata?: Json | null
+          recipient: string
+          sent_at?: string | null
+          status?: string
+          subject: string
+          template_slug?: string | null
+        }
+        Update: {
+          created_at?: string | null
+          email_type?: string
+          error_message?: string | null
+          html_body?: string | null
+          id?: string
+          metadata?: Json | null
+          recipient?: string
+          sent_at?: string | null
+          status?: string
+          subject?: string
+          template_slug?: string | null
+        }
+        Relationships: []
+      }
+      email_templates: {
+        Row: {
+          created_at: string | null
+          html_body: string
+          id: string
+          is_active: boolean | null
+          name: string
+          slug: string
+          subject: string
+          updated_at: string | null
+          variables: Json | null
+        }
+        Insert: {
+          created_at?: string | null
+          html_body: string
+          id?: string
+          is_active?: boolean | null
+          name: string
+          slug: string
+          subject: string
+          updated_at?: string | null
+          variables?: Json | null
+        }
+        Update: {
+          created_at?: string | null
+          html_body?: string
+          id?: string
+          is_active?: boolean | null
+          name?: string
+          slug?: string
+          subject?: string
+          updated_at?: string | null
+          variables?: Json | null
+        }
+        Relationships: []
+      }
       generated_product_images: {
         Row: {
           created_at: string
