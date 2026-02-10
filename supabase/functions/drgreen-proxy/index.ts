@@ -3090,7 +3090,7 @@ serve(async (req) => {
       
       case "get-user-me": {
         // GET /user/me - Get current authenticated user details
-        response = await drGreenRequestBody("/user/me", "GET", {});
+        response = await drGreenRequestQuery("/user/me", {});
         break;
       }
       
@@ -3818,7 +3818,7 @@ serve(async (req) => {
       
       case "get-clients-summary": {
         // GET /dapp/clients/summary - Get client summary stats
-        response = await drGreenRequestBody("/dapp/clients/summary", "GET", {}, false, adminEnvConfig);
+        response = await drGreenRequestQuery("/dapp/clients/summary", {}, false, adminEnvConfig);
         break;
       }
       
@@ -3847,7 +3847,7 @@ serve(async (req) => {
       
       case "get-sales-summary": {
         // GET /dapp/sales/summary - Get sales summary by stage
-        response = await drGreenRequestBody("/dapp/sales/summary", "GET", {}, false, adminEnvConfig);
+        response = await drGreenRequestQuery("/dapp/sales/summary", {}, false, adminEnvConfig);
         break;
       }
       
@@ -4010,7 +4010,7 @@ serve(async (req) => {
       
       case "get-user-nfts": {
         // GET /dapp/users/nfts - Get user's owned NFTs
-        response = await drGreenRequestBody("/dapp/users/nfts", "GET", {});
+        response = await drGreenRequestQuery("/dapp/users/nfts", {}, false, adminEnvConfig);
         break;
       }
       
