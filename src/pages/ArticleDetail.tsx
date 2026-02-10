@@ -22,6 +22,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { supabase } from "@/integrations/supabase/client";
+import DOMPurify from "dompurify";
 
 interface Article {
   id: string;
@@ -143,12 +144,18 @@ const renderContent = (content: string) => {
     let processedLine = trimmed;
     processedLine = processedLine.replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>');
 
+    // Sanitize to prevent XSS
+    const sanitizedHtml = DOMPurify.sanitize(processedLine, {
+      ALLOWED_TAGS: ['strong', 'em', 'a', 'br'],
+      ALLOWED_ATTR: ['href', 'target', 'rel'],
+    });
+
     // Regular paragraph
     elements.push(
       <p 
         key={index} 
         className="font-body text-foreground/90 leading-relaxed mb-4"
-        dangerouslySetInnerHTML={{ __html: processedLine }}
+        dangerouslySetInnerHTML={{ __html: sanitizedHtml }}
       />
     );
   });
