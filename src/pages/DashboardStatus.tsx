@@ -12,6 +12,7 @@ import { Badge } from '@/components/ui/badge';
 import { CheckCircle2, Clock, Lock, UserCircle, FileText, Shield, Loader2, RefreshCw, AlertTriangle, Search } from 'lucide-react';
 import { motion } from 'framer-motion';
 import { useToast } from '@/hooks/use-toast';
+import { useUserRole } from '@/hooks/useUserRole';
 
 interface VerificationStep {
   id: string;
@@ -29,6 +30,14 @@ export default function DashboardStatus() {
   const [lookupResult, setLookupResult] = useState<string | null>(null);
   const [isLookingUp, setIsLookingUp] = useState(false);
   const { toast } = useToast();
+  const { isAdmin, isLoading: roleLoading } = useUserRole();
+
+  // Admin should never land on verification page — redirect to admin dashboard
+  useEffect(() => {
+    if (!roleLoading && isAdmin) {
+      navigate('/admin', { replace: true });
+    }
+  }, [isAdmin, roleLoading, navigate]);
 
   // Manual lookup from Dr. Green API
   const handleManualLookup = useCallback(async () => {

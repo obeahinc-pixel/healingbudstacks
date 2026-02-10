@@ -14,6 +14,7 @@ import { useShop } from '@/context/ShopContext';
 import { Link } from 'react-router-dom';
 import { formatPrice } from '@/lib/currency';
 import { PriceBreakdownTooltip } from './PriceBreakdownTooltip';
+import { useUserRole } from '@/hooks/useUserRole';
 
 export function Cart() {
   const {
@@ -55,7 +56,11 @@ export function Cart() {
     };
   };
 
-  const eligibility = getEligibilityStatus();
+  const { isAdmin } = useUserRole();
+
+  const eligibility = isAdmin
+    ? { message: 'Admin access — checkout enabled', canCheckout: true }
+    : getEligibilityStatus();
 
   return (
     <Sheet open={isCartOpen} onOpenChange={setIsCartOpen}>

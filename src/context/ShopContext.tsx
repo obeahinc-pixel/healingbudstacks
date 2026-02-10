@@ -397,6 +397,21 @@ export function ShopProvider({ children }: { children: React.ReactNode }) {
     return () => subscription.unsubscribe();
   }, [fetchCart, fetchClient]);
 
+  // Live sync: poll for verification status updates every 60 seconds
+  // Stops polling once the patient is fully verified to reduce API load
+  useEffect(() => {
+    if (!drGreenClient?.drgreen_client_id) return;
+    if (drGreenClient.drgreen_client_id.startsWith('local-')) return;
+    if (drGreenClient.is_kyc_verified && drGreenClient.admin_approval === 'VERIFIED') return;
+
+    const interval = setInterval(() => {
+      console.log('[ShopContext] Polling live verification status...');
+      fetchClient();
+    }, 60000);
+
+    return () => clearInterval(interval);
+  }, [drGreenClient?.drgreen_client_id, drGreenClient?.is_kyc_verified, drGreenClient?.admin_approval, fetchClient]);
+
   const addToCart = async (item: Omit<CartItem, 'id'>) => {
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) {

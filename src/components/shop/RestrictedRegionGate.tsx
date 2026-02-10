@@ -6,6 +6,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { useShop } from '@/context/ShopContext';
 import { supabase } from '@/integrations/supabase/client';
 import { useEffect, useState } from 'react';
+import { useUserRole } from '@/hooks/useUserRole';
 
 // Countries with restricted cannabis product display (require verification)
 const RESTRICTED_COUNTRIES = ['GB', 'PT'];
@@ -18,6 +19,7 @@ interface RestrictedRegionGateProps {
 export function RestrictedRegionGate({ children, countryCode }: RestrictedRegionGateProps) {
   const navigate = useNavigate();
   const { drGreenClient, isEligible, isLoading } = useShop();
+  const { isAdmin, isLoading: roleLoading } = useUserRole();
   const [user, setUser] = useState<any>(null);
   const [checkingAuth, setCheckingAuth] = useState(true);
 
@@ -43,8 +45,13 @@ export function RestrictedRegionGate({ children, countryCode }: RestrictedRegion
     return <>{children}</>;
   }
 
+  // Admin bypass — admins can always browse products regardless of region
+  if (isAdmin) {
+    return <>{children}</>;
+  }
+
   // Loading state
-  if (checkingAuth || isLoading) {
+  if (checkingAuth || isLoading || roleLoading) {
     return (
       <div className="flex items-center justify-center py-16">
         <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary" />
