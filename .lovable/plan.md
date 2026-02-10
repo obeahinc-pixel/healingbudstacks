@@ -1,52 +1,64 @@
 
 
-## Fix: Move `pg_net` Extension Out of Public Schema
+## Admin Dashboard Role-Based Access Control Review
 
 ### Current State
+The admin routes work correctly but have an inconsistency worth addressing:
+- AdminLayout checks the admin role and blocks rendering for non-admins (shows "Access Denied")
+- However, admin routes in App.tsx do NOT use the `ProtectedRoute` component
+- Database-level RLS policies correctly enforce admin access on all sensitive tables using `has_role()`
 
-The security scanner flags "Extensions in Public Schema." After investigation, **only one extension remains in `public`**:
+### What Works Well
+- All admin-only database tables are protected by RLS policies using `has_role(auth.uid(), 'admin')`
+- The `has_role()` function uses `SECURITY DEFINER` to prevent recursive RLS issues
+- AdminLayout correctly blocks UI rendering for non-admin users
+- Non-admin users see a clean "Access Denied" screen with navigation options
 
-| Extension | Current Schema | Status |
-|-----------|---------------|--------|
-| pg_net | public | Needs moving |
-| pgcrypto | extensions | Already correct |
-| uuid-ossp | extensions | Already correct |
-| pg_graphql | graphql | Already correct |
-| pg_cron | pg_catalog | Already correct |
+### Recommended Fix: Wrap Admin Routes with ProtectedRoute
 
-### What Is `pg_net`?
+Add the `ProtectedRoute` component around all admin routes in `App.tsx` for defense-in-depth. This provides:
+- Redirect to `/auth` for unauthenticated users (instead of showing "Access Denied")
+- Prevents admin page components from mounting at all for unauthorized users
+- Consistent security pattern across the application
 
-`pg_net` provides HTTP client functions (`net.http_get`, `net.http_post`, etc.) used internally by the platform for webhook delivery and scheduled tasks. Its actual objects live in the `net` schema, but the extension registration points to `public`.
+### Changes
 
-### Why This Is Flagged
+**File: `src/App.tsx`**
+Wrap each admin route with `ProtectedRoute`:
 
-Extensions in the public schema can pollute the namespace, create naming conflicts, and expose internal functions to application queries. Best practice is to isolate extensions in a dedicated schema.
+```text
+Before:
+<Route path="/admin" element={<AdminDashboard />} />
 
-### Fix
-
-Run a single database migration:
-
-```sql
-ALTER EXTENSION pg_net SET SCHEMA extensions;
+After:
+<Route path="/admin" element={
+  <ProtectedRoute requiredRole="admin">
+    <AdminDashboard />
+  </ProtectedRoute>
+} />
 ```
 
-### Risk Assessment
-
-- **Low risk**: `pg_net` objects already live in the `net` schema, so moving the extension registration should not break anything
-- **Possible blocker**: Lovable Cloud may restrict this operation at the platform level. If the migration fails with a permissions error, we confirm it truly is platform-managed and update the security finding accordingly
-- **No application code references `pg_net` directly** -- it is used internally by the platform
-
-### Outcome
-
-- If successful: the security warning is resolved and the finding is deleted
-- If blocked by permissions: we update the finding to confirm it cannot be fixed at the application level and mark it as permanently ignored with a clear explanation
+Apply this pattern to all 11 admin routes:
+- `/admin`
+- `/admin/clients`
+- `/admin/orders`
+- `/admin/prescriptions`
+- `/admin/strains`
+- `/admin/strain-sync`
+- `/admin/strain-knowledge`
+- `/admin/roles`
+- `/admin/wallet-mappings`
+- `/admin/tools`
+- `/admin/settings`
 
 ### Technical Details
+- `ProtectedRoute` uses `supabase.rpc('has_role', ...)` for server-side role verification
+- This is a double-layer check: ProtectedRoute (route level) + AdminLayout (component level)
+- No database changes needed — RLS policies are already correctly configured
+- No new dependencies required
 
-| Item | Detail |
-|------|--------|
-| Migration SQL | `ALTER EXTENSION pg_net SET SCHEMA extensions;` |
-| Files modified | One new migration file only |
-| Code changes | None |
-| Rollback | `ALTER EXTENSION pg_net SET SCHEMA public;` |
+### Risk Assessment
+- **Low risk**: This is additive security, not a behavior change
+- The AdminLayout check remains as a fallback
+- Both checks use the same `has_role` database function
 
