@@ -43,6 +43,7 @@ const ShopRegister = lazy(() => import("./pages/ShopRegister"));
 const StrainDetail = lazy(() => import("./pages/StrainDetail"));
 const Checkout = lazy(() => import("./pages/Checkout"));
 const Orders = lazy(() => import("./pages/Orders"));
+const OrderDetail = lazy(() => import("./pages/OrderDetail"));
 const DashboardStatus = lazy(() => import("./pages/DashboardStatus"));
 const PatientDashboard = lazy(() => import("./pages/PatientDashboard"));
 const AdminPrescriptions = lazy(() => import("./pages/AdminPrescriptions"));
@@ -89,6 +90,11 @@ const AnimatedRoutes = () => {
           <Route path="/orders" element={
             <ComplianceGuard>
               <Orders />
+            </ComplianceGuard>
+          } />
+          <Route path="/orders/:orderId" element={
+            <ComplianceGuard>
+              <OrderDetail />
             </ComplianceGuard>
           } />
           
