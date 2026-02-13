@@ -1,108 +1,61 @@
 
 
-# Auto-Updating The Wire with Real Cannabis News
+# Fix Email Region Detection + Enhance Order Detail View
 
-## Overview
+## Problem 1: Email Says "Healing Buds Portugal" for South Africa Orders
 
-Create a backend function that automatically fetches real cannabis industry news from RSS feeds and web sources, enriches titles/summaries with Healing Buds branding keywords, and inserts them into the `articles` table. The function can be called on-demand from admin or scheduled via a cron trigger.
-
-## Data Flow
+The order confirmation email shows "Healing Buds Portugal" because the country code fallback in `Checkout.tsx` (lines 295 and 357) defaults to `'PT'`:
 
 ```text
-RSS Feeds (Marijuana Moment, Leafly, etc.)
-        |
-        v
-[fetch-wire-articles] Edge Function
-        |
-        +--> Parse RSS/Atom XML feeds
-        +--> Extract title, summary, link, date, category
-        +--> Enrich with Healing Buds keywords
-        +--> Deduplicate by source_url
-        +--> Insert into articles table
-        |
-        v
-  articles table (auto-visible on The Wire page)
+const clientCountryCode = drGreenClient.country_code || countryCode || 'PT';
 ```
 
-## Implementation Steps
+Since `ricardo.drgreennft.com` is the South Africa site, but the client's `country_code` in the DB is likely null or not set, it falls through to the hardcoded `'PT'` fallback. This then gets passed as `region: 'PT'` to the email function, which looks up "Healing Buds Portugal" in `DOMAIN_CONFIG`.
 
-### Step 1: Add `source_url` column to articles table
-Add a nullable `source_url` text column so we can track original article links and deduplicate on re-fetch.
+### Fix
+- **`src/pages/Checkout.tsx`** (lines 295 and 357): Change fallback from `'PT'` to `'ZA'` since this is the South Africa store. Better yet, derive a smarter default from the tenant context or shipping address country.
 
-### Step 2: Create `fetch-wire-articles` Edge Function
-A new backend function that:
+## Problem 2: Email "from" Domain Always Uses .co.za
 
-1. **Fetches RSS feeds** from curated cannabis news sources:
-   - Marijuana Moment (`https://www.marijuanamoment.net/feed/`)
-   - Leafly News (`https://www.leafly.com/news/feed`)
-   - Cannabis Health News (`https://cannabishealthnews.co.uk/feed/`)
-   - MJBizDaily (`https://mjbizdaily.com/feed/`)
+The `send-order-confirmation` edge function hardcodes the "from" address to `noreply@send.healingbuds.co.za` for all regions. Each region's emails should come from their own domain.
 
-2. **Parses XML** using DOMParser (available in Deno) to extract articles
+### Fix
+- **`supabase/functions/send-order-confirmation/index.ts`**: Add `sendDomain` to `DOMAIN_CONFIG` and use it in the `from:` field:
+  - ZA: `send.healingbuds.co.za`
+  - PT: `send.healingbuds.pt`
+  - GB: `send.healingbuds.co.uk`
+  - Global fallback: `send.healingbuds.co.za`
+- Fix PT support email from `suporte@healingbuds.pt` to `support@healingbuds.pt`
 
-3. **Auto-categorises** each article based on keywords:
-   - "study", "research", "clinical" --> `research`
-   - "blockchain", "NFT", "traceability" --> `blockchain`
-   - "market", "regulation", "license", "export" --> `industry`
-   - Default --> `news`
+## Problem 3: Order Detail Page Should Show Email-Level Information
 
-4. **Enriches titles** with Healing Buds context where relevant:
-   - Appends category tags like "[Research]", "[Industry Update]"
-   - Keeps original title intact for authenticity
+When clicking "Recent Orders", the detail page should mirror the information shown in the confirmation email: status banner (e.g., "Order Queued for Processing"), product table with quantities and subtotals, shipping address, and total -- similar to the email layout.
 
-5. **Deduplicates** by checking if `source_url` already exists in the articles table
+### Fix
+- **`src/pages/OrderDetail.tsx`**: Add a status banner card (amber for pending/local orders, green for confirmed) matching the email's visual treatment. The existing page already shows items, shipping, and total -- just needs the prominent status message banner added above the timeline.
 
-6. **Inserts new articles** with:
-   - `title`: Original title
-   - `slug`: Generated from title
-   - `summary`: RSS description (stripped of HTML)
-   - `content`: Full summary with source attribution
-   - `source_url`: Link to original article
-   - `category`: Auto-detected
-   - `author`: Source name (e.g., "Marijuana Moment")
-   - `published_at`: Original publish date from RSS
+## Problem 4: OrdersTable Shows Limited Info on Mobile
 
-### Step 3: Seed initial articles
-Insert 8 hand-curated real articles as initial content so The Wire has content immediately.
+On mobile, most columns are hidden (`hidden md:table-cell`). When a user taps an order, they only see the date, a truncated ref, and the action button.
 
-### Step 4: Update ArticleDetail page
-Add a "Read Original Article" link when `source_url` is present, using the existing `readOriginal` i18n translation key.
+### Fix
+- **`src/components/shop/OrdersTable.tsx`**: Show total amount and a single combined status badge on mobile (remove `hidden md:table-cell` from key columns or add a mobile-specific summary row).
 
-### Step 5: Add admin trigger (optional)
-Add a "Refresh News" button on the admin tools page that calls the edge function to pull latest articles on demand.
+---
 
-## RSS Sources and Keywords
+## Technical Changes Summary
 
-| Source | Feed URL | Focus |
-|--------|----------|-------|
-| Marijuana Moment | marijuanamoment.net/feed/ | Policy, legislation, research |
-| Leafly | leafly.com/news/feed | Strains, patient guides, industry |
-| Cannabis Health News | cannabishealthnews.co.uk/feed/ | UK medical cannabis |
-| MJBizDaily | mjbizdaily.com/feed/ | Business, market data |
+| File | Change |
+|------|--------|
+| `src/pages/Checkout.tsx` (2 lines) | Change `'PT'` fallback to `'ZA'` on lines 295 and 357 |
+| `supabase/functions/send-order-confirmation/index.ts` | Add `sendDomain` to DOMAIN_CONFIG, use region-aware `from:`, fix PT `suporte` to `support` |
+| `src/pages/OrderDetail.tsx` | Add status banner card (amber for pending/local, green for confirmed) above the timeline |
+| `src/components/shop/OrdersTable.tsx` | Show total and status on mobile view |
 
-## Keyword Enrichment Strategy
+## Implementation Order
 
-Articles are tagged with Healing Buds-relevant keywords for SEO:
-- Medical cannabis, EU-GMP, patient access, cannabis research
-- Portugal, regulated cannabis, seed-to-sale traceability
-- Dr. Green, NFT, blockchain cannabis
-
-These appear as metadata/tags, not injected into article text (keeps content authentic).
-
-## Technical Details
-
-### New Files
-- `supabase/functions/fetch-wire-articles/index.ts` - RSS fetcher and article importer
-
-### Modified Files
-- `src/pages/ArticleDetail.tsx` - Add "Read Original Article" link with `source_url`
-
-### Database Changes
-- Add `source_url` (text, nullable) to `articles` table
-- Insert 8 initial seed articles
-
-### Security
-- Edge function uses service role key to insert articles (bypasses RLS)
-- No external API keys required (RSS feeds are public)
-- Admin-only invocation via authorization header check
+1. Fix the country code fallback in Checkout.tsx (root cause of wrong region)
+2. Update send-order-confirmation edge function with region-aware domains
+3. Enhance OrderDetail.tsx with status banner
+4. Improve OrdersTable mobile visibility
 
