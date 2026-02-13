@@ -1,4 +1,5 @@
 import { format } from 'date-fns';
+import { useNavigate } from 'react-router-dom';
 import { Badge } from '@/components/ui/badge';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Button } from '@/components/ui/button';
@@ -79,6 +80,7 @@ function calculateTotalQty(items: OrderItem[]): number {
 }
 
 export function OrdersTable({ orders, onReorder, isReordering }: OrdersTableProps) {
+  const navigate = useNavigate();
   return (
     <div className="rounded-2xl border border-border/50 overflow-hidden">
       <Table>
@@ -96,7 +98,11 @@ export function OrdersTable({ orders, onReorder, isReordering }: OrdersTableProp
         </TableHeader>
         <TableBody>
           {orders.map((order) => (
-            <TableRow key={order.id} className="hover:bg-muted/30 transition-colors">
+            <TableRow
+              key={order.id}
+              className="hover:bg-muted/30 transition-colors cursor-pointer"
+              onClick={() => navigate(`/orders/${order.id}`)}
+            >
               <TableCell className="font-medium">
                 {format(new Date(order.created_at), 'dd MMM yyyy')}
               </TableCell>
@@ -106,7 +112,12 @@ export function OrdersTable({ orders, onReorder, isReordering }: OrdersTableProp
                 </code>
               </TableCell>
               <TableCell className="hidden md:table-cell">
-                <Button variant="ghost" size="sm" className="h-7 px-2">
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="h-7 px-2"
+                  onClick={(e) => { e.stopPropagation(); navigate(`/orders/${order.id}`); }}
+                >
                   <Eye className="h-3.5 w-3.5 mr-1" />
                   View
                 </Button>
@@ -132,7 +143,7 @@ export function OrdersTable({ orders, onReorder, isReordering }: OrdersTableProp
                   <Button
                     variant="outline"
                     size="sm"
-                    onClick={() => onReorder(order)}
+                    onClick={(e) => { e.stopPropagation(); onReorder(order); }}
                     disabled={isReordering}
                     className="rounded-xl"
                   >
