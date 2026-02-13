@@ -1,90 +1,55 @@
 
-# Ensure Orders Are Posted to Dr. Green API
 
-## Problem Identified
+# Populate The Wire with Real Cannabis Industry News
 
-The most recent order created by `scott.k1@outlook.com` shows:
-- **Status**: `PENDING_SYNC` (not synced to Dr. Green)
-- **Order ID**: `LOCAL-20260210-7P0Z` (local fallback, not from Dr. Green API)
-- **sync_status**: `pending`
-- **Created**: 2026-02-10 (patient order placed but failed to post to Dr. Green)
+## What We Found
 
-This indicates the order creation flow hit an error and fell back to creating a local order record instead of posting to the Dr. Green API.
+We discovered several high-quality, real news sources directly relevant to Healing Buds:
 
-## Root Causes to Investigate
+### Real Articles to Seed (from verified sources)
 
-### 1. **create-order Action Implementation** (drgreen-proxy/index.ts, lines 2745-3050)
-The `create-order` action in the proxy performs a 3-step atomic transaction:
-- **Step 1**: PATCH client shipping address to Dr. Green (`/dapp/clients/{id}`)
-- **Step 2**: POST cart items to Dr. Green (`/dapp/carts`)
-- **Step 3**: POST order from cart (`/dapp/orders`)
+1. **"Medical Cannabis Reduces Opioid Prescriptions, Study Shows"** (Marijuana Moment, Dec 2025) - Category: research
+2. **"Portugal: INFARMED Tightens Import/Export of Medical Cannabis"** (Cannabis Regulations, Sep 2025) - Category: industry  
+3. **"Trump Signs Order to Expand Medical Cannabis Research"** (Drugs.com, 2025) - Category: news
+4. **"The Blockchain Bud: Tracking Cannabis from Seed to Sale"** (Tenn Canna, Oct 2025) - Category: blockchain
+5. **"Is Portugal Losing Its Role as Europe's Cannabis Gateway?"** (Business of Cannabis, Nov 2025) - Category: industry
+6. **"Medicare's First-Ever CBD Pilot Program"** (Marijuana Herald, Nov 2025) - Category: research
+7. **"Portugal Medical Cannabis Market Overview 2025"** (Prohibition Partners, Sep 2025) - Category: industry
+8. **"Blockchain-Based Cannabis Traceability in Supply Chain Management"** (IJACSA, 2024) - Category: blockchain
 
-**Potential Issues**:
-- The PATCH step might be failing silently if the shipping address format is incorrect
-- Cart items might not be posting correctly (format mismatch, missing fields)
-- The order creation from cart might be failing due to missing/inactive client status
-- Environment credential mismatches between steps (each step might need specific credentials)
+## Implementation Plan
 
-### 2. **Missing Error Logging**
-The checkout page shows a local fallback was created, but there's no visible error message to the user about why the Dr. Green API call failed. The edge function logs for this specific order don't exist, which suggests:
-- The error might be happening in the Checkout component before it even calls the proxy
-- Or the proxy error is being silently caught and not logged
+### Step 1: Seed the articles table with real news
+Insert 8 real articles into the `articles` table with:
+- Real titles and summaries from verified sources
+- Proper categories (news, research, blockchain, industry)
+- Source attribution in the content
+- Links to original articles
+- One article marked as featured
 
-### 3. **Client Verification Status**
-The order was placed, but we need to verify:
-- Is the client (`dfd81e64-c17d-4a1b-8111-cdf49f879e82`) still verified in Dr. Green?
-- Has `isKYCVerified` and `adminApproval === "VERIFIED"` been maintained?
-- Is the client active in the Dr. Green system?
+### Step 2: Add a `source_url` column to articles table
+Add a column to store the original article URL so users can "Read Original Article" (this translation key already exists in the i18n files).
 
-## Changes Required
-
-### 1. **Add Detailed Error Logging in Checkout** (src/pages/Checkout.tsx, lines 223-242)
-Capture and log the exact error returned from `createOrder()` so we can see what Dr. Green API is returning.
-
-### 2. **Verify the 3-Step Order Creation Flow** (supabase/functions/drgreen-proxy/index.ts, lines 2745-3050)
-Ensure each step:
-- Uses the correct endpoint (`/dapp/clients/{id}` for PATCH, `/dapp/carts` for POST items, `/dapp/orders` for order creation)
-- Uses query-string signing for GET, body-signing for POST/PATCH
-- Handles response normalization correctly
-- Logs errors with specific step identifiers
-
-### 3. **Check Client Eligibility Before Order** (Checkout.tsx)
-Add a pre-order check to verify the client is still eligible (KYC verified + admin approved) before attempting order creation.
-
-### 4. **Monitor Sync Status** (Admin Dashboard)
-Add visibility to the admin dashboard to show:
-- Orders with `PENDING_SYNC` status
-- The `sync_error` field for debugging why orders haven't synced
-- A manual "Retry Sync" button for failed orders
+### Step 3: Update ArticleDetail page
+Ensure the article detail page shows a "Read Original Article" link when `source_url` is present, linking to the real source.
 
 ## Technical Details
 
-### Files to Examine
-- `src/pages/Checkout.tsx` — error handling around `createOrder()` call (lines 223-250)
-- `supabase/functions/drgreen-proxy/index.ts` — `create-order` case (lines 2745-3050)
-- `supabase/functions/drgreen-proxy/index.ts` — PATCH/POST/GET request helpers and signing logic
+### Database Changes
+- Add `source_url` (text, nullable) column to `articles` table
+- Insert 8 curated real articles with proper slugs, summaries, categories, and content
 
-### Key Questions to Resolve
-1. **What exact error is returned from the Dr. Green API during order creation?**
-   - Check the `createOrder()` result in Checkout.tsx
-   - Add console.log for the full error message
+### Files to Modify
+- **ArticleDetail page** (if exists): Add "Read Original" link using existing i18n key `readOriginal`
 
-2. **Is the client still active and verified?**
-   - Run: `SELECT is_kyc_verified, admin_approval FROM drgreen_clients WHERE user_id = 'd6f38c88-c111-4be6-a0c9-ae64b7c294a6'`
-   - Verify the Dr. Green API still has this client as active
+### Content Categories Used
+- `news` - General cannabis policy and legislation
+- `research` - Clinical studies and medical findings  
+- `industry` - Market analysis and business news
+- `blockchain` - Traceability and Web3 cannabis tech
 
-3. **Are the API endpoints being called?**
-   - Check edge function logs for PATCH (shipping), POST (cart items), POST (order creation)
-   - Verify which step is failing
+### No Risk
+- Only adds new data and an optional column
+- Does not change any existing functionality
+- All articles are from real, verifiable public sources
 
-### Risk Assessment
-- **Low Risk**: Adding logging and verification checks doesn't change existing behavior
-- **No Breaking Changes**: Only enhances error visibility
-- **Backwards Compatible**: Existing orders aren't affected
-
-### Verification Steps
-1. Review the exact error message from the failed order creation
-2. Verify client eligibility in Dr. Green (is-active, KYC verified, admin approval)
-3. Check edge function logs for the 3-step order flow
-4. Place a new test order and capture the complete error flow
-5. Confirm the new order syncs correctly to Dr. Green (status changes from `PENDING_SYNC` to `confirmed`)
