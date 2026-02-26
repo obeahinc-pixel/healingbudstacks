@@ -1,5 +1,5 @@
 import { motion, AnimatePresence } from 'framer-motion';
-import { ShoppingCart, X, Minus, Plus, Trash2, ShieldCheck, AlertCircle } from 'lucide-react';
+import { ShoppingCart, X, Trash2, ShieldCheck, AlertCircle } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import {
@@ -110,31 +110,19 @@ export function Cart() {
                         </p>
                       </PriceBreakdownTooltip>
                       
-                      {/* Quantity controls */}
-                      <div className="flex items-center gap-2 mt-2">
-                        <Button
-                          size="icon"
-                          variant="outline"
-                          className="h-7 w-7"
-                          onClick={() =>
-                            updateQuantity(item.strain_id, item.quantity - 1)
-                          }
-                        >
-                          <Minus className="h-3 w-3" />
-                        </Button>
-                        <span className="w-8 text-center text-sm font-medium">
-                          {item.quantity}g
-                        </span>
-                        <Button
-                          size="icon"
-                          variant="outline"
-                          className="h-7 w-7"
-                          onClick={() =>
-                            updateQuantity(item.strain_id, item.quantity + 1)
-                          }
-                        >
-                          <Plus className="h-3 w-3" />
-                        </Button>
+                      {/* Denomination selector */}
+                      <div className="flex items-center gap-1.5 mt-2">
+                        {[2, 5, 10].map((d) => (
+                          <Button
+                            key={d}
+                            size="sm"
+                            variant={item.quantity === d ? "default" : "outline"}
+                            className="h-7 px-2.5 text-xs font-bold"
+                            onClick={() => updateQuantity(item.strain_id, d)}
+                          >
+                            {d}g
+                          </Button>
+                        ))}
                       </div>
                     </div>
 

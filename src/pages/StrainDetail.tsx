@@ -3,7 +3,7 @@ import { useParams, useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import { Helmet } from 'react-helmet-async';
 import { 
-  ArrowLeft, Leaf, Droplets, ShoppingCart, Minus, Plus, 
+  ArrowLeft, Leaf, Droplets, ShoppingCart, 
   Wind, Beaker, Heart, Clock, Shield, Star, Sparkles,
   AlertCircle, CheckCircle2, Info, Stethoscope, Pill, 
   AlertTriangle, Users, Timer, BookOpen, Loader2
@@ -32,7 +32,8 @@ export default function StrainDetail() {
   const { addToCart, isEligible, drGreenClient, countryCode, convertFromEUR } = useShop();
   const { products, isLoading } = useProducts(countryCode);
   const { toast } = useToast();
-  const [quantity, setQuantity] = useState(1);
+  const DENOMINATIONS = [2, 5, 10] as const;
+  const [selectedDenomination, setSelectedDenomination] = useState<number>(2);
   const [product, setProduct] = useState<Product | null>(null);
   
   // Fetch AI-enhanced medical information
@@ -70,12 +71,12 @@ export default function StrainDetail() {
     addToCart({
       strain_id: product.id,
       strain_name: product.name,
-      quantity,
+      quantity: selectedDenomination,
       unit_price: product.retailPrice,
     });
     toast({
       title: "Added to cart",
-      description: `${quantity}g of ${product.name} added to your cart.`,
+      description: `${selectedDenomination}g of ${product.name} added to your cart.`,
     });
   };
 
@@ -302,31 +303,24 @@ export default function StrainDetail() {
 
                 {/* Add to Cart */}
                 <div className="p-6 rounded-2xl bg-muted/50 dark:bg-white/5 border border-border/50 dark:border-white/10 space-y-4">
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <span className="font-semibold">Select Quantity</span>
-                      <p className="text-sm text-muted-foreground">{product.stock}g in stock</p>
+                  <div className="space-y-3">
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <span className="font-semibold">Select Weight</span>
+                        <p className="text-sm text-muted-foreground">{product.stock}g in stock</p>
+                      </div>
                     </div>
                     <div className="flex items-center gap-3">
-                      <Button
-                        size="icon"
-                        variant="outline"
-                        className="h-10 w-10 rounded-xl"
-                        onClick={() => setQuantity(Math.max(1, quantity - 1))}
-                        disabled={quantity <= 1}
-                      >
-                        <Minus className="h-4 w-4" />
-                      </Button>
-                      <span className="w-14 text-center font-bold text-xl">{quantity}g</span>
-                      <Button
-                        size="icon"
-                        variant="outline"
-                        className="h-10 w-10 rounded-xl"
-                        onClick={() => setQuantity(Math.min(product.stock, quantity + 1))}
-                        disabled={quantity >= product.stock}
-                      >
-                        <Plus className="h-4 w-4" />
-                      </Button>
+                      {DENOMINATIONS.map((d) => (
+                        <Button
+                          key={d}
+                          variant={selectedDenomination === d ? "default" : "outline"}
+                          className="flex-1 h-12 rounded-xl text-lg font-bold"
+                          onClick={() => setSelectedDenomination(d)}
+                        >
+                          {d}g
+                        </Button>
+                      ))}
                     </div>
                   </div>
                   
@@ -335,7 +329,7 @@ export default function StrainDetail() {
                   <div className="flex items-center justify-between">
                     <span className="text-muted-foreground">Total:</span>
                     <span className="text-3xl font-bold text-primary">
-                      {formatPrice(convertFromEUR(product.retailPrice * quantity), countryCode)}
+                      {formatPrice(convertFromEUR(product.retailPrice * selectedDenomination), countryCode)}
                     </span>
                   </div>
 

@@ -177,6 +177,37 @@ export default function OrderDetail() {
                   </div>
                 </div>
 
+                {/* Status Banner */}
+                {(() => {
+                  const s = order.status.toLowerCase();
+                  const p = order.payment_status.toLowerCase();
+                  const isLocal = order.drgreen_order_id.startsWith("LOCAL-");
+                  const isPending = s === "pending_sync" || s === "awaiting_processing" || p === "awaiting_processing" || isLocal;
+                  const isPaid = p === "paid" || p === "completed";
+                  const isProcessing = s === "processing";
+
+                  let bannerClass = "bg-amber-500/15 border-amber-500/30 text-amber-700 dark:text-amber-300";
+                  let bannerIcon = <Package className="w-5 h-5" />;
+                  let bannerText = "Order Queued for Processing";
+
+                  if (isPaid && !isPending) {
+                    bannerClass = "bg-emerald-500/15 border-emerald-500/30 text-emerald-700 dark:text-emerald-300";
+                    bannerIcon = <CreditCard className="w-5 h-5" />;
+                    bannerText = "Order Confirmed — Payment Received";
+                  } else if (isProcessing) {
+                    bannerClass = "bg-blue-500/15 border-blue-500/30 text-blue-700 dark:text-blue-300";
+                    bannerIcon = <RefreshCw className="w-5 h-5 animate-spin" />;
+                    bannerText = "Order Being Processed";
+                  }
+
+                  return (
+                    <div className={cn("flex items-center gap-3 p-4 rounded-2xl border", bannerClass)}>
+                      {bannerIcon}
+                      <span className="font-semibold">{bannerText}</span>
+                    </div>
+                  );
+                })()}
+
                 {/* Timeline */}
                 <Card className="rounded-2xl border-border/50">
                   <CardHeader className="pb-2">

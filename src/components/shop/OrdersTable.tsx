@@ -92,7 +92,7 @@ export function OrdersTable({ orders, onReorder, isReordering }: OrdersTableProp
             <TableHead className="font-semibold hidden md:table-cell">Payment</TableHead>
             <TableHead className="font-semibold hidden md:table-cell">Status</TableHead>
             <TableHead className="font-semibold hidden md:table-cell text-center">Qty</TableHead>
-            <TableHead className="font-semibold hidden md:table-cell text-right">Total</TableHead>
+            <TableHead className="font-semibold text-right">Total</TableHead>
             <TableHead className="font-semibold text-right">Actions</TableHead>
           </TableRow>
         </TableHeader>
@@ -110,6 +110,12 @@ export function OrdersTable({ orders, onReorder, isReordering }: OrdersTableProp
                 <code className="text-xs bg-muted px-2 py-1 rounded">
                   {order.drgreen_order_id.slice(0, 8)}...
                 </code>
+                {/* Mobile-only status badge */}
+                <div className="md:hidden mt-1">
+                  <Badge className={`${getStatusColor(order.status)} border text-[10px]`}>
+                    {getDisplayStatus(order.status)}
+                  </Badge>
+                </div>
               </TableCell>
               <TableCell className="hidden md:table-cell">
                 <Button
@@ -135,7 +141,7 @@ export function OrdersTable({ orders, onReorder, isReordering }: OrdersTableProp
               <TableCell className="hidden md:table-cell text-center">
                 {calculateTotalQty(order.items)}
               </TableCell>
-              <TableCell className="hidden md:table-cell text-right font-semibold">
+              <TableCell className="text-right font-semibold">
                 {formatPrice(order.total_amount, order.country_code || 'ZA')}
               </TableCell>
               <TableCell className="text-right">

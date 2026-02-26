@@ -1,6 +1,6 @@
-import { useState, useRef, useCallback } from 'react';
+import { useState, useRef } from 'react';
 import { motion } from 'framer-motion';
-import { ShoppingCart, Eye, Leaf, Droplets, Lock, AlertCircle, Cloud, Database, Zap, Moon, Brain, Smile, Heart, Sun, Wind, Minus, Plus } from 'lucide-react';
+import { ShoppingCart, Eye, Leaf, Droplets, Lock, AlertCircle, Cloud, Database, Zap, Moon, Brain, Smile, Heart, Sun, Wind } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { useShop } from '@/context/ShopContext';
 import { Product, DataSource } from '@/hooks/useProducts';
@@ -59,7 +59,8 @@ export function ProductCard({ product, onViewDetails, showDataSource = false }: 
 
   const hasVideo = !!product.videoUrl;
 
-  const [quantity, setQuantity] = useState(1);
+  const DENOMINATIONS = [2, 5, 10] as const;
+  const [selectedDenomination, setSelectedDenomination] = useState<number>(2);
 
   const handleAddToCart = () => {
     if (!drGreenClient) {
@@ -71,20 +72,9 @@ export function ProductCard({ product, onViewDetails, showDataSource = false }: 
       toast({ title: t('eligibility.pending'), description: t('eligibility.kycPending'), variant: "destructive" });
       return;
     }
-    addToCart({ strain_id: product.id, strain_name: product.name, quantity, unit_price: product.retailPrice });
-    toast({ title: "Added to cart", description: `${quantity}g of ${product.name} added to your cart.` });
-    setQuantity(1);
+    addToCart({ strain_id: product.id, strain_name: product.name, quantity: selectedDenomination, unit_price: product.retailPrice });
+    toast({ title: "Added to cart", description: `${selectedDenomination}g of ${product.name} added to your cart.` });
   };
-
-  const incrementQty = useCallback((e: React.MouseEvent) => {
-    e.stopPropagation();
-    setQuantity(q => Math.min(product.stock, q + 1));
-  }, [product.stock]);
-
-  const decrementQty = useCallback((e: React.MouseEvent) => {
-    e.stopPropagation();
-    setQuantity(q => Math.max(1, q - 1));
-  }, []);
 
   const handleMouseEnter = () => {
     setIsHovered(true);
@@ -237,31 +227,23 @@ export function ProductCard({ product, onViewDetails, showDataSource = false }: 
             </div>
           </div>
 
-          {/* 5. Quantity + CTA */}
-          <div className="flex items-center gap-2">
-            <div className="flex items-center gap-1.5 shrink-0">
-              <Button
-                size="icon"
-                variant="outline"
-                className="h-8 w-8 rounded-lg"
-                onClick={decrementQty}
-                disabled={quantity <= 1}
-              >
-                <Minus className="h-3 w-3" />
-              </Button>
-              <span className="w-8 text-center text-sm font-bold">{quantity}g</span>
-              <Button
-                size="icon"
-                variant="outline"
-                className="h-8 w-8 rounded-lg"
-                onClick={incrementQty}
-                disabled={quantity >= product.stock}
-              >
-                <Plus className="h-3 w-3" />
-              </Button>
+          {/* 5. Denomination + CTA */}
+          <div className="space-y-2">
+            <div className="flex items-center gap-1.5">
+              {DENOMINATIONS.map((d) => (
+                <Button
+                  key={d}
+                  size="sm"
+                  variant={selectedDenomination === d ? "default" : "outline"}
+                  className="h-8 rounded-lg flex-1 text-xs font-bold"
+                  onClick={(e) => { e.stopPropagation(); setSelectedDenomination(d); }}
+                >
+                  {d}g
+                </Button>
+              ))}
             </div>
             <Button
-              className="flex-1 h-10 rounded-xl font-semibold transition-all duration-300 shadow-lg hover:shadow-xl text-sm"
+              className="w-full h-10 rounded-xl font-semibold transition-all duration-300 shadow-lg hover:shadow-xl text-sm"
               disabled={!product.availability}
               variant={!drGreenClient || !isEligible ? "secondary" : "default"}
               onClick={(e) => { e.stopPropagation(); handleAddToCart(); }}
