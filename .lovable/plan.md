@@ -1,61 +1,87 @@
 
 
-# Fix Email Region Detection + Enhance Order Detail View
+# Fix Quantity Denominations + Country Code + Order Detail Enhancements
 
-## Problem 1: Email Says "Healing Buds Portugal" for South Africa Orders
+## 1. Restrict Quantity to 2g, 5g, 10g Only
 
-The order confirmation email shows "Healing Buds Portugal" because the country code fallback in `Checkout.tsx` (lines 295 and 357) defaults to `'PT'`:
+Currently, all quantity selectors use +1/-1 increment/decrement buttons allowing any gram amount. This needs to change to fixed denomination buttons (2g, 5g, 10g) across 5 locations:
 
+### Files to update:
+
+**`src/components/shop/ProductCard.tsx`**
+- Replace the +/- quantity stepper with three selectable denomination buttons: 2g, 5g, 10g
+- Default selection: 2g
+- The "Add to Cart" button adds the selected denomination
+
+**`src/components/shop/ProductDetail.tsx`** (quick-view dialog)
+- Same change: replace +/- stepper with 2g / 5g / 10g toggle buttons
+- Total price updates based on selected denomination
+
+**`src/pages/StrainDetail.tsx`** (full strain detail page)
+- Same change: replace +/- stepper with 2g / 5g / 10g toggle buttons
+
+**`src/components/shop/Cart.tsx`** (cart sidebar)
+- Replace the +/- per-item controls with a denomination selector (2g / 5g / 10g)
+- When user switches denomination, call `updateQuantity` with the new value
+
+**`src/context/ShopContext.tsx`**
+- The `addToCart` function currently adds quantities together. When a user adds the same strain with a different denomination, it should either replace the quantity or add as a separate line item. Replacing makes more sense for fixed denominations.
+
+### UI Pattern
+Three pill/toggle buttons in a row:
 ```text
-const clientCountryCode = drGreenClient.country_code || countryCode || 'PT';
+[ 2g ] [ 5g ] [ 10g ]
 ```
-
-Since `ricardo.drgreennft.com` is the South Africa site, but the client's `country_code` in the DB is likely null or not set, it falls through to the hardcoded `'PT'` fallback. This then gets passed as `region: 'PT'` to the email function, which looks up "Healing Buds Portugal" in `DOMAIN_CONFIG`.
-
-### Fix
-- **`src/pages/Checkout.tsx`** (lines 295 and 357): Change fallback from `'PT'` to `'ZA'` since this is the South Africa store. Better yet, derive a smarter default from the tenant context or shipping address country.
-
-## Problem 2: Email "from" Domain Always Uses .co.za
-
-The `send-order-confirmation` edge function hardcodes the "from" address to `noreply@send.healingbuds.co.za` for all regions. Each region's emails should come from their own domain.
-
-### Fix
-- **`supabase/functions/send-order-confirmation/index.ts`**: Add `sendDomain` to `DOMAIN_CONFIG` and use it in the `from:` field:
-  - ZA: `send.healingbuds.co.za`
-  - PT: `send.healingbuds.pt`
-  - GB: `send.healingbuds.co.uk`
-  - Global fallback: `send.healingbuds.co.za`
-- Fix PT support email from `suporte@healingbuds.pt` to `support@healingbuds.pt`
-
-## Problem 3: Order Detail Page Should Show Email-Level Information
-
-When clicking "Recent Orders", the detail page should mirror the information shown in the confirmation email: status banner (e.g., "Order Queued for Processing"), product table with quantities and subtotals, shipping address, and total -- similar to the email layout.
-
-### Fix
-- **`src/pages/OrderDetail.tsx`**: Add a status banner card (amber for pending/local orders, green for confirmed) matching the email's visual treatment. The existing page already shows items, shipping, and total -- just needs the prominent status message banner added above the timeline.
-
-## Problem 4: OrdersTable Shows Limited Info on Mobile
-
-On mobile, most columns are hidden (`hidden md:table-cell`). When a user taps an order, they only see the date, a truncated ref, and the action button.
-
-### Fix
-- **`src/components/shop/OrdersTable.tsx`**: Show total amount and a single combined status badge on mobile (remove `hidden md:table-cell` from key columns or add a mobile-specific summary row).
+Selected state uses primary color, unselected uses outline. Clean, simple, no confusion.
 
 ---
 
-## Technical Changes Summary
+## 2. Fix Country Code Fallback (Portugal to South Africa)
+
+**`src/pages/Checkout.tsx`** -- two lines (295 and 357):
+- Change `|| 'PT'` to `|| 'ZA'`
+- This fixes the email saying "Healing Buds Portugal" for South Africa store orders
+
+---
+
+## 3. Add Status Banner to Order Detail Page
+
+**`src/pages/OrderDetail.tsx`**
+- Add a prominent status banner card between the header and timeline, matching the email notification style:
+  - Amber background for pending/local orders: "Order Queued for Processing"
+  - Green background for confirmed/paid orders: "Order Confirmed"
+  - Blue for processing: "Order Being Processed"
+- This gives users the same immediate status feedback they see in email
+
+---
+
+## 4. Improve OrdersTable Mobile Visibility
+
+**`src/components/shop/OrdersTable.tsx`**
+- Remove `hidden md:table-cell` from the Total column so it always shows
+- Add a compact status badge visible on mobile (combine payment + order status into one line)
+- Keep Invoice, Qty, and separate status columns as desktop-only
+
+---
+
+## Technical Summary
 
 | File | Change |
 |------|--------|
-| `src/pages/Checkout.tsx` (2 lines) | Change `'PT'` fallback to `'ZA'` on lines 295 and 357 |
-| `supabase/functions/send-order-confirmation/index.ts` | Add `sendDomain` to DOMAIN_CONFIG, use region-aware `from:`, fix PT `suporte` to `support` |
-| `src/pages/OrderDetail.tsx` | Add status banner card (amber for pending/local, green for confirmed) above the timeline |
-| `src/components/shop/OrdersTable.tsx` | Show total and status on mobile view |
+| `src/components/shop/ProductCard.tsx` | Replace +/- stepper with 2g/5g/10g toggle buttons |
+| `src/components/shop/ProductDetail.tsx` | Replace +/- stepper with 2g/5g/10g toggle buttons |
+| `src/pages/StrainDetail.tsx` | Replace +/- stepper with 2g/5g/10g toggle buttons |
+| `src/components/shop/Cart.tsx` | Replace +/- per-item controls with 2g/5g/10g selector |
+| `src/context/ShopContext.tsx` | Update addToCart to handle fixed denominations (replace quantity) |
+| `src/pages/Checkout.tsx` (lines 295, 357) | Change `'PT'` fallback to `'ZA'` |
+| `src/pages/OrderDetail.tsx` | Add status banner card above timeline |
+| `src/components/shop/OrdersTable.tsx` | Show total + status on mobile |
 
 ## Implementation Order
 
-1. Fix the country code fallback in Checkout.tsx (root cause of wrong region)
-2. Update send-order-confirmation edge function with region-aware domains
-3. Enhance OrderDetail.tsx with status banner
-4. Improve OrdersTable mobile visibility
+1. Fix country code fallback in Checkout.tsx (quick, high-impact)
+2. Implement 2g/5g/10g denomination selector across all 4 shop components
+3. Update ShopContext addToCart logic for fixed denominations
+4. Add status banner to OrderDetail page
+5. Fix OrdersTable mobile columns
 
