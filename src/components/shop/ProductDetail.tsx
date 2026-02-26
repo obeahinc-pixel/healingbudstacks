@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { X, Leaf, Droplets, Minus, Plus, ShoppingCart, Wind } from 'lucide-react';
+import { X, Leaf, Droplets, ShoppingCart, Wind } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Dialog, DialogContent } from '@/components/ui/dialog';
@@ -15,7 +15,8 @@ interface ProductDetailProps {
 }
 
 export function ProductDetail({ product, onClose }: ProductDetailProps) {
-  const [quantity, setQuantity] = useState(1);
+  const DENOMINATIONS = [2, 5, 10] as const;
+  const [selectedDenomination, setSelectedDenomination] = useState<number>(2);
   const { addToCart, countryCode } = useShop();
 
   const handleAddToCart = () => {
@@ -23,7 +24,7 @@ export function ProductDetail({ product, onClose }: ProductDetailProps) {
     addToCart({
       strain_id: product.id,
       strain_name: product.name,
-      quantity,
+      quantity: selectedDenomination,
       unit_price: product.retailPrice,
     });
     onClose();
@@ -153,31 +154,20 @@ export function ProductDetail({ product, onClose }: ProductDetailProps) {
                 </div>
 
                 <div className="mt-auto space-y-3">
-                  {/* Quantity selector */}
-                  <div className="flex items-center gap-4">
-                    <span className="text-sm font-medium">Quantity (g):</span>
+                  {/* Denomination selector */}
+                  <div className="space-y-2">
+                    <span className="text-sm font-medium">Select Weight:</span>
                     <div className="flex items-center gap-2">
-                      <Button
-                        size="icon"
-                        variant="outline"
-                        onClick={() => setQuantity(Math.max(1, quantity - 1))}
-                        disabled={quantity <= 1}
-                      >
-                        <Minus className="h-4 w-4" />
-                      </Button>
-                      <span className="w-12 text-center font-semibold">
-                        {quantity}
-                      </span>
-                      <Button
-                        size="icon"
-                        variant="outline"
-                        onClick={() =>
-                          setQuantity(Math.min(product.stock, quantity + 1))
-                        }
-                        disabled={quantity >= product.stock}
-                      >
-                        <Plus className="h-4 w-4" />
-                      </Button>
+                      {DENOMINATIONS.map((d) => (
+                        <Button
+                          key={d}
+                          variant={selectedDenomination === d ? "default" : "outline"}
+                          className="flex-1 font-bold"
+                          onClick={() => setSelectedDenomination(d)}
+                        >
+                          {d}g
+                        </Button>
+                      ))}
                     </div>
                   </div>
 
@@ -189,7 +179,7 @@ export function ProductDetail({ product, onClose }: ProductDetailProps) {
                   {/* Total and add to cart */}
                   <div className="flex items-center justify-between">
                     <span className="text-lg font-semibold">
-                      Total: {formatPrice(product.retailPrice * quantity, countryCode)}
+                      Total: {formatPrice(product.retailPrice * selectedDenomination, countryCode)}
                     </span>
                   </div>
 
