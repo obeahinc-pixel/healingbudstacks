@@ -65,7 +65,7 @@ interface RecentItem {
 const AdminDashboard = () => {
   const navigate = useNavigate();
   const { toast } = useToast();
-  const { getDashboardSummary, getSalesSummary, getClientsSummary, getDappClients } = useDrGreenApi();
+  const { getDappClients, getDappOrders } = useDrGreenApi();
   const { syncClientsToSupabase, syncing: syncingClients } = useDrGreenClientSync();
   const { environment, environmentLabel } = useApiEnvironment();
   const [loading, setLoading] = useState(true);
@@ -151,8 +151,9 @@ const AdminDashboard = () => {
     if (showRefreshToast) setRefreshing(true);
 
     try {
+      // Fetch from local DB (cache)
       const [ordersRes, clientsRes] = await Promise.all([
-        supabase.from('drgreen_orders').select('status'),
+        supabase.from('drgreen_orders').select('status, total_amount'),
         supabase.from('drgreen_clients').select('is_kyc_verified, admin_approval'),
       ]);
 
@@ -161,36 +162,32 @@ const AdminDashboard = () => {
       const totalClients = clientsRes.data?.length || 0;
       const verifiedClients = clientsRes.data?.filter(c => c.is_kyc_verified && c.admin_approval === 'VERIFIED').length || 0;
 
-      let dappTotalClients = 0, dappTotalOrders = 0, dappTotalSales = 0, dappPendingClients = 0;
+      // Dr. Green API is source of truth — fetch real data from supported endpoints
+      let dappTotalClients = totalClients, dappTotalOrders = totalOrders, dappTotalSales = 0, dappPendingClients = 0;
 
       try {
-        const { data: clientSummary, error: clientError } = await getClientsSummary();
-        if (!clientError && clientSummary?.summary) {
-          dappTotalClients = clientSummary.summary.totalCount || 0;
-          dappPendingClients = clientSummary.summary.PENDING || 0;
+        const [clientsResult, ordersResult] = await Promise.all([
+          getDappClients({ take: 100, orderBy: 'desc' }),
+          getDappOrders({ take: 100, orderBy: 'desc' }),
+        ]);
+
+        if (!clientsResult.error && clientsResult.data?.clients) {
+          dappTotalClients = clientsResult.data.total || clientsResult.data.clients.length;
+          dappPendingClients = clientsResult.data.clients.filter((c: any) => c.adminApproval === 'PENDING').length;
         }
 
-        if (!clientSummary?.summary) {
-          const { data: clientsData, error: clientsError } = await getDappClients({ take: 100 });
-          if (!clientsError && clientsData?.clients) {
-            dappTotalClients = clientsData.total || clientsData.clients.length;
-            dappPendingClients = clientsData.clients.filter((c: any) => c.adminApproval === 'PENDING').length;
-          }
+        if (!ordersResult.error && ordersResult.data?.orders) {
+          dappTotalOrders = ordersResult.data.total || ordersResult.data.orders.length;
+          dappTotalSales = ordersResult.data.orders.reduce((sum: number, o: any) => sum + (o.totalAmount || 0), 0);
         }
-
-        const { data: dappSummary, error: dappError } = await getDashboardSummary();
-        if (!dappError && dappSummary) dappTotalOrders = dappSummary.totalOrders || 0;
-
-        const { data: salesSummary, error: salesError } = await getSalesSummary();
-        if (!salesError && salesSummary) dappTotalSales = salesSummary.totalSales || 0;
       } catch (dappErr) {
-        console.log('Dr Green API stats unavailable:', dappErr);
+        console.log('Dr Green API stats unavailable, using local data:', dappErr);
       }
 
       setStats({ totalOrders, pendingOrders, totalClients, verifiedClients, dappTotalClients, dappTotalOrders, dappTotalSales, dappPendingClients });
 
       if (showRefreshToast) {
-        toast({ title: "Data Refreshed", description: "Dashboard statistics updated." });
+        toast({ title: "Data Refreshed", description: "Dashboard statistics updated from Dr. Green API." });
       }
     } catch (error) {
       console.error('Error fetching stats:', error);
