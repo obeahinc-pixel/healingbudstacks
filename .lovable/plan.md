@@ -1,37 +1,45 @@
 
 
-# Plan: Clean Up Stale References to Removed Infrastructure
+# Fix: Login Blocking and Client Sync Issues
 
-## Findings
+## Problem Analysis
 
-### 1. `supabase/config.toml` — 3 stale function blocks (lines 33-34, 60-61, 63-64)
-The previous deletion removed the function directories but missed removing their config entries:
-- `[functions.exchange-rates]` (deleted in prior cleanup)
-- `[functions.prescription-expiry-check]` (deleted this session)
-- `[functions.upload-email-logo]` (deleted this session)
+Two intertwined issues:
 
-### 2. `docs/ACCOUNT-MIGRATION.md` — 3 stale table rows (lines 157, 166, 168)
-References `exchange-rates`, `prescription-expiry-check`, and `upload-email-logo` as active edge functions. These rows should be removed from the edge functions inventory table.
+1. **Login gets stuck on "Preparing your portal..." spinner** — After login, `Auth.tsx` waits for `isLoading` (from `ShopContext`) to become `false`. But `fetchClient()` calls `drgreen-proxy` edge functions (auto-discovery + live status check) which can hang or timeout. Until those complete, `isLoading` stays `true` and the user is trapped on the spinner.
 
-### 3. `docs/API-GAP-ANALYSIS.md` — references to deleted `useWalletAuth.ts` (lines 34, 74, 188)
-Three lines reference `src/hooks/useWalletAuth.ts` as an active file. These should be updated to note the hook was removed and wallet auth now uses `WalletContext` + the `wallet-auth` edge function directly.
+2. **Auth logs show `refresh_token_not_found`** — After password resets, old browser sessions have invalid refresh tokens. The app may not cleanly recover from this, compounding the stuck-loading issue.
 
-### End-to-End Test Results
-- **Homepage**: Loads correctly, no errors.
-- **Shop page**: Loads with 7 strains, filters and cart button functional.
-- **Dashboard**: Correctly shows "Sign In Required" for unauthenticated users.
-- **Console**: No errors related to removed code.
+3. **`onAuthStateChange` calls async functions that internally call `supabase.auth.getSession()`** — This can cause auth lock contention per Supabase's known deadlock pattern.
 
-## Changes
+## Fix Plan
 
-| Action | File | Detail |
-|--------|------|--------|
-| Edit | `supabase/config.toml` | Remove `[functions.exchange-rates]`, `[functions.prescription-expiry-check]`, `[functions.upload-email-logo]` blocks |
-| Edit | `docs/ACCOUNT-MIGRATION.md` | Remove rows for `exchange-rates`, `prescription-expiry-check`, `upload-email-logo` |
-| Edit | `docs/API-GAP-ANALYSIS.md` | Update 3 references from `useWalletAuth.ts` to note it was removed; wallet auth handled by `WalletContext` + `wallet-auth` edge function |
+### 1. Make `fetchClient` non-blocking for login
 
-## Impact
-- Documentation-only changes plus config cleanup
-- No functional change to the application
-- Prevents confusion from stale references to deleted files
+Currently `isLoading` stays `true` until the Dr. Green API responds. Change the flow to:
+
+- Set `isLoading = false` as soon as the **local DB query** completes (fast)
+- Run the Dr. Green API live-status check as a background update (fire-and-forget)
+- This way login redirect happens immediately based on cached local data
+
+In `src/context/ShopContext.tsx`:
+- After the local `drgreen_clients` query returns, immediately call `setDrGreenClient(localRecord)` and `setIsLoading(false)`
+- Then kick off the API status check as a non-blocking background call that updates state when it resolves
+- For auto-discovery (no local record), also set `isLoading = false` quickly and run discovery in background
+
+### 2. Fix `onAuthStateChange` to avoid lock contention
+
+In `ShopContext.tsx` line 348, the callback calls `fetchClient()` which internally calls `supabase.auth.getSession()`. This can deadlock.
+
+Fix: use `setTimeout(() => { fetchCart(); fetchClient(); }, 0)` to defer execution outside the auth lock.
+
+### 3. Handle stale refresh tokens gracefully
+
+In `ShopContext.tsx`, if `getSession()` returns a session but subsequent calls fail with auth errors, catch and clear state cleanly rather than hanging.
+
+## Files Changed
+
+- `src/context/ShopContext.tsx` — Restructure `fetchClient` to be non-blocking; fix `onAuthStateChange` defer pattern; add timeout safety
+
+## No Database Changes Required
 
