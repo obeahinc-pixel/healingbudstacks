@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { useNavigate, Link } from "react-router-dom";
 import { formatPrice } from "@/lib/currency";
 import { motion } from "framer-motion";
@@ -23,7 +23,8 @@ import {
   AlertTriangle,
   Activity,
   UserPlus,
-  Package
+  Package,
+  Zap
 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import AdminLayout from "@/layout/AdminLayout";
@@ -35,7 +36,6 @@ import { Badge } from "@/components/ui/badge";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { useToast } from "@/hooks/use-toast";
 import { useDrGreenApi } from "@/hooks/useDrGreenApi";
-import { useDrGreenClientSync } from "@/hooks/useDrGreenClientSync";
 import { useApiEnvironment } from "@/context/ApiEnvironmentContext";
 import { useAccount, useDisconnect, useChainId } from "wagmi";
 import { useDrGreenKeyOwnership } from "@/hooks/useNFTOwnership";
@@ -66,8 +66,9 @@ const AdminDashboard = () => {
   const navigate = useNavigate();
   const { toast } = useToast();
   const { getDappClients, getDappOrders } = useDrGreenApi();
-  const { syncClientsToSupabase, syncing: syncingClients } = useDrGreenClientSync();
   const { environment, environmentLabel } = useApiEnvironment();
+  const [syncing, setSyncing] = useState(false);
+  const [realtimeConnected, setRealtimeConnected] = useState(false);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [stats, setStats] = useState<DashboardStats | null>(null);
@@ -82,8 +83,27 @@ const AdminDashboard = () => {
   const { hasNFT, isLoading: nftLoading } = useDrGreenKeyOwnership();
   const { openWalletModal } = useWallet();
 
+  const refetchAll = useCallback(async () => {
+    const { data: { session } } = await supabase.auth.getSession();
+    if (session?.user) {
+      await Promise.all([fetchStats(), fetchRecentActivity()]);
+    }
+  }, []);
+
+  // Realtime subscription for live updates
   useEffect(() => {
-    // Guard: wait for valid session before loading dashboard
+    const channel = supabase
+      .channel('admin-dashboard-live')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'drgreen_clients' }, () => refetchAll())
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'drgreen_orders' }, () => refetchAll())
+      .subscribe((status) => {
+        setRealtimeConnected(status === 'SUBSCRIBED');
+      });
+
+    return () => { supabase.removeChannel(channel); };
+  }, [refetchAll]);
+
+  useEffect(() => {
     const init = async () => {
       const { data: { session } } = await supabase.auth.getSession();
       if (session?.user) {
@@ -296,7 +316,13 @@ const AdminDashboard = () => {
     >
       <div className="space-y-8">
         {/* Top Bar: Refresh */}
-        <div className="flex flex-wrap items-center justify-end gap-4">
+        <div className="flex flex-wrap items-center justify-between gap-4">
+          {realtimeConnected && (
+            <div className="flex items-center gap-1.5">
+              <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
+              <span className="text-xs font-medium text-emerald-600 dark:text-emerald-400">Live</span>
+            </div>
+          )}
           <Button
             variant="outline"
             size="sm"
@@ -376,11 +402,26 @@ const AdminDashboard = () => {
             <Button
               variant="outline"
               size="sm"
-              onClick={() => syncClientsToSupabase()}
-              disabled={syncingClients}
+              onClick={async () => {
+                setSyncing(true);
+                try {
+                  const { data, error } = await supabase.functions.invoke('sync-drgreen-data');
+                  if (error) throw error;
+                  toast({
+                    title: "Sync Complete",
+                    description: `Clients: ${data?.clients?.upserted || 0} synced (${data?.clients?.linked || 0} linked). Orders: ${data?.orders?.upserted || 0} synced.`,
+                  });
+                  await refetchAll();
+                } catch (err: any) {
+                  toast({ title: "Sync Failed", description: err.message || "Unknown error", variant: "destructive" });
+                } finally {
+                  setSyncing(false);
+                }
+              }}
+              disabled={syncing}
             >
-              <RefreshCw className={`w-4 h-4 mr-2 ${syncingClients ? 'animate-spin' : ''}`} />
-              Sync Client Data
+              <Zap className={`w-4 h-4 mr-2 ${syncing ? 'animate-pulse' : ''}`} />
+              {syncing ? 'Syncing...' : 'Sync Now'}
             </Button>
             <Button variant="outline" size="sm" asChild>
               <a href="https://app.drgreennft.com" target="_blank" rel="noopener noreferrer">
