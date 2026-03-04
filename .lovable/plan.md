@@ -1,45 +1,50 @@
 
 
-# Fix: Login Blocking and Client Sync Issues
+# Plan: Fix 401 Errors and Sync Dr. Green API as Source of Truth
 
-## Problem Analysis
+## Problem
 
-Two intertwined issues:
+1. **401 errors** from the Dr. Green API on `dashboard-summary`, `sales-summary`, and `get-clients-summary` endpoints — these endpoints likely don't exist or the API key lacks permissions for them
+2. **`healingbudsglobal@gmail.com` doesn't exist** as an auth user — needs to be created as admin
+3. **Local database is out of sync** — only 3 clients and 1 order locally, but more exist on the Dr. Green API
+4. **`scott@healingbuds.global` is admin** but shouldn't be — `healingbudsglobal@gmail.com` should be
 
-1. **Login gets stuck on "Preparing your portal..." spinner** — After login, `Auth.tsx` waits for `isLoading` (from `ShopContext`) to become `false`. But `fetchClient()` calls `drgreen-proxy` edge functions (auto-discovery + live status check) which can hang or timeout. Until those complete, `isLoading` stays `true` and the user is trapped on the spinner.
+## Root Cause of 401
 
-2. **Auth logs show `refresh_token_not_found`** — After password resets, old browser sessions have invalid refresh tokens. The app may not cleanly recover from this, compounding the stuck-loading issue.
+The proxy calls `/dapp/dashboard/summary`, `/dapp/sales/summary`, and `/dapp/clients/summary` — these are **not documented in the Postman/API reference**. The Dr. Green API only supports:
+- `GET /dapp/clients` (list clients)
+- `GET /dapp/orders` (list orders)
+- `GET /dapp/dashboard/sales` and `/dapp/dashboard/analytics`
 
-3. **`onAuthStateChange` calls async functions that internally call `supabase.auth.getSession()`** — This can cause auth lock contention per Supabase's known deadlock pattern.
+The dashboard should derive stats from **real endpoints** (`dapp-clients`, `dapp-orders`) rather than calling non-existent summary endpoints.
 
-## Fix Plan
+## Steps
 
-### 1. Make `fetchClient` non-blocking for login
+### 1. Create `healingbudsglobal@gmail.com` auth account
+- Use `admin-update-user` Edge Function with password `12345678`, email confirmed
+- The `auto_assign_admin_role` trigger will auto-assign admin role
 
-Currently `isLoading` stays `true` until the Dr. Green API responds. Change the flow to:
+### 2. Remove admin role from `scott@healingbuds.global`
+- Delete the role record, or confirm with you first
 
-- Set `isLoading = false` as soon as the **local DB query** completes (fast)
-- Run the Dr. Green API live-status check as a background update (fire-and-forget)
-- This way login redirect happens immediately based on cached local data
+### 3. Fix AdminDashboard to use real API endpoints
+- Replace `getClientsSummary()`, `getDashboardSummary()`, `getSalesSummary()` calls (which hit non-existent endpoints causing 401s) with `getDappClients()` and existing order data
+- Compute summary stats client-side from the real client/order lists
+- This eliminates the 401 errors entirely
 
-In `src/context/ShopContext.tsx`:
-- After the local `drgreen_clients` query returns, immediately call `setDrGreenClient(localRecord)` and `setIsLoading(false)`
-- Then kick off the API status check as a non-blocking background call that updates state when it resolves
-- For auto-discovery (no local record), also set `isLoading = false` quickly and run discovery in background
+### 4. Build a proper sync mechanism
+- On admin dashboard load or manual "Sync" button, fetch all clients via `GET /dapp/clients` and all orders via `GET /dapp/orders` from the Dr. Green API
+- Upsert results into local `drgreen_clients` and `drgreen_orders` tables
+- The Dr. Green API is the source of truth; local tables are a cache for faster UI access and RLS-based user queries
 
-### 2. Fix `onAuthStateChange` to avoid lock contention
-
-In `ShopContext.tsx` line 348, the callback calls `fetchClient()` which internally calls `supabase.auth.getSession()`. This can deadlock.
-
-Fix: use `setTimeout(() => { fetchCart(); fetchClient(); }, 0)` to defer execution outside the auth lock.
-
-### 3. Handle stale refresh tokens gracefully
-
-In `ShopContext.tsx`, if `getSession()` returns a session but subsequent calls fail with auth errors, catch and clear state cleanly rather than hanging.
+### 5. Link unlinked clients
+- For Dr. Green clients whose email matches an existing auth user, auto-create the `drgreen_clients` mapping row with matching `user_id`
+- For clients with no local auth account, log them as external (they'll be linked on signup)
 
 ## Files Changed
 
-- `src/context/ShopContext.tsx` — Restructure `fetchClient` to be non-blocking; fix `onAuthStateChange` defer pattern; add timeout safety
-
-## No Database Changes Required
+- `src/pages/AdminDashboard.tsx` — remove calls to non-existent summary endpoints, compute stats from real data
+- `src/hooks/useDrGreenApi.ts` — possibly remove or deprecate `getDashboardSummary`, `getSalesSummary`, `getClientsSummary` if they only call non-existent endpoints
+- `src/hooks/useDrGreenClientSync.ts` — enhance to also sync orders, not just clients
+- Edge Function invocation to create the admin account
 
