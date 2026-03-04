@@ -193,6 +193,10 @@ function getOrderStatusEmail(orderId: string, status: string, event: string, con
 
   const template = statusMessages[event] || statusMessages['order.status_updated'];
 
+  const supabaseUrl = Deno.env.get("SUPABASE_URL") || '';
+  const whiteLogoUrl = `${supabaseUrl}/storage/v1/object/public/email-assets/hb-logo-white.png`;
+  const tealLogoUrl = `${supabaseUrl}/storage/v1/object/public/email-assets/hb-logo-teal.png`;
+
   return {
     subject: template.subject,
     html: `
@@ -205,7 +209,8 @@ function getOrderStatusEmail(orderId: string, status: string, event: string, con
       <body style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background-color: #f4f4f5; margin: 0; padding: 20px;">
         <div style="max-width: 600px; margin: 0 auto; background-color: #ffffff; border-radius: 12px; overflow: hidden; box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);">
           <div style="background-color: ${template.color}; padding: 24px; text-align: center;">
-            <h1 style="color: #ffffff; margin: 0; font-size: 24px;">${config.brandName}</h1>
+            <img src="${whiteLogoUrl}" alt="${config.brandName}" width="160" style="max-width:160px;height:auto;" />
+            <h1 style="color: #ffffff; margin: 12px 0 0; font-size: 20px;">${config.brandName}</h1>
           </div>
           <div style="padding: 32px;">
             <p style="color: #18181b; font-size: 16px; line-height: 1.6; margin: 0 0 16px 0;">
@@ -224,6 +229,7 @@ function getOrderStatusEmail(orderId: string, status: string, event: string, con
             </div>
           </div>
           <div style="background-color: #f4f4f5; padding: 20px; text-align: center;">
+            <img src="${tealLogoUrl}" alt="${config.brandName}" width="120" style="max-width:120px;height:auto;margin-bottom:8px;" />
             <p style="margin: 0; color: #71717a; font-size: 12px;">
               ${config.brandName} Medical Cannabis
             </p>
@@ -811,10 +817,11 @@ serve(async (req) => {
       If you have any questions, please contact us at <a href="mailto:support@${confirmConfig.domain}" style="color:#0d9488;">support@${confirmConfig.domain}</a>.
     </p>
   </div>
-  <div style="background:#f4f4f5;padding:20px;text-align:center;">
-    <p style="margin:0;color:#71717a;font-size:12px;">${confirmConfig.brandName}</p>
-    <p style="margin:8px 0 0;color:#a1a1aa;font-size:11px;">Transactional email regarding your order. © ${new Date().getFullYear()}</p>
-  </div>
+   <div style="background:#f4f4f5;padding:20px;text-align:center;">
+     <img src="${supabaseUrl}/storage/v1/object/public/email-assets/hb-logo-teal.png" alt="${confirmConfig.brandName}" width="120" style="max-width:120px;height:auto;margin-bottom:8px;" />
+     <p style="margin:0;color:#71717a;font-size:12px;">${confirmConfig.brandName}</p>
+     <p style="margin:8px 0 0;color:#a1a1aa;font-size:11px;">Transactional email regarding your order. © ${new Date().getFullYear()}</p>
+   </div>
 </div></body></html>`;
 
           try {
