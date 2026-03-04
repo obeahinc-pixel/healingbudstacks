@@ -1,43 +1,47 @@
 
 
-# Plan: Test API Endpoints and Confirm All Dr. Green Clients
+# Plan: Fix 401 Errors, Sync Data, and Resolve Regression
 
-## Current State (Verified)
+## Root Cause Analysis
 
-**Admin Account**: `healingbudsglobal@gmail.com` exists with admin role — confirmed working.
-`scott@healingbuds.global` has been removed from admin — confirmed.
+The regression has **three distinct causes**:
 
-**API Connectivity**: Health check passes. Dr. Green API at `https://api.drgreennft.com/api/v1` responds with 200. Signing works. All secrets configured.
+1. **`get-orders` returns 404**: The proxy calls `/dapp/clients/{clientId}/orders` which does NOT exist in the Dr. Green API. The correct endpoint is `/dapp/orders` with query params. Edge function logs confirm repeated `Response status: 404` for every `get-orders` call. This breaks the patient dashboard order history.
 
-**Local Database** (out of sync with Dr. Green):
-- 3 clients: `scott.k1@outlook.com` (VERIFIED), `scott@healingbuds.global` (VERIFIED), `motester@yopmail.com` (PENDING)
-- 1 order: LOCAL-20260210 from scott.k1 (PENDING_SYNC)
+2. **Admin dashboard 401s on summary endpoints**: `dashboard-summary`, `sales-summary`, `get-clients-summary` are called but don't exist in the Dr. Green API. These were already partially fixed in previous iterations but may still be called from other components.
 
-**The 401 Error**: The `drgreen-proxy` Edge Function requires a valid user JWT for admin actions like `dapp-clients`. The error occurs when calls are made without a logged-in session. This is by design — admin endpoints check the JWT and then verify the user has the `admin` role.
+3. **Data desync**: The `sync-drgreen-data` function works (just confirmed -- 11 clients, 4 orders fetched) but only 4 clients were upserted (those with matching local auth accounts). Orders returned 0 upserts because the order `clientId` maps to Dr. Green client IDs, and the `clientToUser` lookup only found matches for locally-linked clients. The single existing local order has `drgreen_order_id = LOCAL-20260210` which doesn't match any API order ID.
 
-## What Needs to Happen
+## Current State (Just Verified)
 
-### 1. Add a service-role bypass for admin sync operations
-The `drgreen-proxy` currently requires a user JWT even for internal sync operations. We need a way to call `dapp-clients` and `dapp-orders` from tools (or a sync function) without requiring a browser session. Add a dedicated sync Edge Function (`sync-drgreen-data`) that uses the service role key internally — no user JWT needed — and pulls all clients/orders from the Dr. Green API into local tables.
+- **`healingbudsglobal@gmail.com`** exists as admin -- confirmed working
+- **`scott@healingbuds.global`** admin role removed -- confirmed
+- **11 clients** on Dr. Green API, **4 linked locally** (scott.k1, kayliegh.sm, motester, scott@healingbuds.global)
+- **4 orders** on Dr. Green API, **1 local order** (unlinked, local-only ID)
+- **sync-drgreen-data** Edge Function deployed and operational
 
-### 2. Create `sync-drgreen-data` Edge Function
-- Uses `SUPABASE_SERVICE_ROLE_KEY` to write to local DB
-- Calls Dr. Green API directly (same signing logic) to fetch all clients and orders
-- Upserts into `drgreen_clients` and `drgreen_orders`
-- Links clients to local auth users by email match
-- Returns a summary of what was synced
+## Implementation Steps
 
-### 3. Trigger sync and verify data
-- Call the new sync function to pull all data from Dr. Green API
-- Confirm client count matches what the DApp has
-- Report back all clients found
+### 1. Fix `get-orders` action in drgreen-proxy (Root cause of 404)
+Change the `get-orders` case from calling the non-existent `/dapp/clients/{clientId}/orders` to calling `/dapp/orders` with a `clientIds` query parameter filter (same pattern as `dapp-orders` admin action).
 
-### 4. Fix AdminDashboard 401 on load
-The dashboard calls `getDappClients` and `getDappOrders` which go through the proxy. If the user's session token is valid and they have admin role, this should work. The 401 likely happens on initial load before the session is fully hydrated. Add a guard: only call API endpoints after confirming the user session is valid.
+**File**: `supabase/functions/drgreen-proxy/index.ts` (lines ~3120-3131)
+
+### 2. Fix `get-client-orders` action (if present)
+Check if `get-client-orders` in `useDrGreenApi.ts` also uses a broken endpoint path and fix it similarly.
+
+### 3. Fix sync-drgreen-data order upsert logic
+The current logic skips orders when the client has no local `user_id`. Fix: for orders where the client exists in `drgreen_clients`, use that user's `user_id`. For orders where the client has no local account, create a placeholder mapping or skip gracefully with proper logging.
+
+### 4. Remove deprecated summary endpoint calls
+Search for any remaining calls to `getDashboardSummary`, `getSalesSummary`, `getClientsSummary` across the codebase and remove them. The dashboard was already partially fixed but there may be residual references.
+
+### 5. Trigger a full sync after fixes
+After deploying the proxy fix, call `sync-drgreen-data` to pull all 11 clients and 4 orders into the local database correctly.
 
 ## Files Changed
-- `supabase/functions/sync-drgreen-data/index.ts` — new Edge Function for service-role sync
-- `supabase/config.toml` — add `verify_jwt = false` for the new function
-- `src/pages/AdminDashboard.tsx` — guard API calls behind session check
-- `src/hooks/useDrGreenClientSync.ts` — add option to use new sync function instead of proxy
+
+- `supabase/functions/drgreen-proxy/index.ts` -- fix `get-orders` endpoint path from `/dapp/clients/{id}/orders` to `/dapp/orders` with clientId filter
+- `supabase/functions/sync-drgreen-data/index.ts` -- improve order upsert to handle all 4 orders
+- `src/hooks/useDrGreenApi.ts` -- clean up deprecated summary methods, fix `getClientOrders` if broken
 
