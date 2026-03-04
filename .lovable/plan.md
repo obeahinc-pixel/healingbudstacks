@@ -1,46 +1,37 @@
 
 
-# Dead Code Audit Results
+# Plan: Clean Up Stale References to Removed Infrastructure
 
-## Confirmed Dead Code (Safe to Remove)
+## Findings
 
-### 1. `src/hooks/useWalletAuth.ts` -- DEAD HOOK
-Zero imports anywhere in the codebase. Not referenced by any component or page.
+### 1. `supabase/config.toml` — 3 stale function blocks (lines 33-34, 60-61, 63-64)
+The previous deletion removed the function directories but missed removing their config entries:
+- `[functions.exchange-rates]` (deleted in prior cleanup)
+- `[functions.prescription-expiry-check]` (deleted this session)
+- `[functions.upload-email-logo]` (deleted this session)
 
-### 2. `src/components/shop/GeneratedProductImage.tsx` + `src/hooks/useGeneratedImage.ts` -- DEAD COMPONENT + HOOK
-`GeneratedProductImage` is never imported outside its own file. `useGeneratedImage` is only imported by `GeneratedProductImage`. Both are dead.
+### 2. `docs/ACCOUNT-MIGRATION.md` — 3 stale table rows (lines 157, 166, 168)
+References `exchange-rates`, `prescription-expiry-check`, and `upload-email-logo` as active edge functions. These rows should be removed from the edge functions inventory table.
 
-### 3. `src/components/admin/SalesDashboard.tsx` -- DEAD COMPONENT
-Never imported or rendered anywhere. Exports `SalesDashboard` but no file references it.
+### 3. `docs/API-GAP-ANALYSIS.md` — references to deleted `useWalletAuth.ts` (lines 34, 74, 188)
+Three lines reference `src/hooks/useWalletAuth.ts` as an active file. These should be updated to note the hook was removed and wallet auth now uses `WalletContext` + the `wallet-auth` edge function directly.
 
-### 4. `src/components/ProtectedNFTRoute.tsx` -- DEAD COMPONENT (imported but unused)
-Imported in `App.tsx` but never used in any `<Route>`. The import can be removed from `App.tsx` and the file deleted.
-
-### 5. `supabase/functions/prescription-expiry-check/` -- DEAD EDGE FUNCTION
-Zero references in `src/`. Only exists in `config.toml`. No frontend or backend code invokes it.
-
-### 6. `supabase/functions/upload-email-logo/` -- DEAD EDGE FUNCTION
-Zero references in `src/`. Never invoked by any component.
+### End-to-End Test Results
+- **Homepage**: Loads correctly, no errors.
+- **Shop page**: Loads with 7 strains, filters and cart button functional.
+- **Dashboard**: Correctly shows "Sign In Required" for unauthenticated users.
+- **Console**: No errors related to removed code.
 
 ## Changes
 
-| Action | File |
-|--------|------|
-| Delete | `src/hooks/useWalletAuth.ts` |
-| Delete | `src/hooks/useGeneratedImage.ts` |
-| Delete | `src/components/shop/GeneratedProductImage.tsx` |
-| Delete | `src/components/admin/SalesDashboard.tsx` |
-| Delete | `src/components/ProtectedNFTRoute.tsx` |
-| Delete | `supabase/functions/prescription-expiry-check/` |
-| Delete | `supabase/functions/upload-email-logo/` |
-| Edit | `src/App.tsx` -- remove `ProtectedNFTRoute` import (line 16) |
-| Edit | `supabase/config.toml` -- remove `[functions.prescription-expiry-check]` and `[functions.upload-email-logo]` blocks |
-
-## Not Dead (Confirmed Active)
-All other hooks, utilities, components, and edge functions have active import chains and are in use. No further removals recommended.
+| Action | File | Detail |
+|--------|------|--------|
+| Edit | `supabase/config.toml` | Remove `[functions.exchange-rates]`, `[functions.prescription-expiry-check]`, `[functions.upload-email-logo]` blocks |
+| Edit | `docs/ACCOUNT-MIGRATION.md` | Remove rows for `exchange-rates`, `prescription-expiry-check`, `upload-email-logo` |
+| Edit | `docs/API-GAP-ANALYSIS.md` | Update 3 references from `useWalletAuth.ts` to note it was removed; wallet auth handled by `WalletContext` + `wallet-auth` edge function |
 
 ## Impact
-- Removes ~7 dead files and 2 edge function deployments
-- Cleans one unused import from `App.tsx`
+- Documentation-only changes plus config cleanup
 - No functional change to the application
+- Prevents confusion from stale references to deleted files
 
