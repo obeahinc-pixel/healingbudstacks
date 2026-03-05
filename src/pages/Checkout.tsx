@@ -69,27 +69,6 @@ async function retryOperation<T>(
     error: lastError || `${operationName} failed after ${maxRetries} attempts` 
   };
 }
-// Fire-and-forget email — never blocks checkout
-async function sendOrderConfirmationEmail(payload: {
-  email: string;
-  customerName: string;
-  orderId: string;
-  items: { strain_name: string; quantity: number; unit_price: number }[];
-  totalAmount: number;
-  currency: string;
-  shippingAddress: ShippingAddress;
-  isLocalOrder: boolean;
-  region?: string;
-}) {
-  try {
-    if (!payload.email) return;
-    const { error } = await supabase.functions.invoke('send-order-confirmation', { body: payload });
-    if (error) console.warn('[OrderEmail] Failed:', error.message);
-    else console.log('[OrderEmail] Sent for', payload.orderId);
-  } catch (e) {
-    console.warn('[OrderEmail] Error:', e);
-  }
-}
 
 const Checkout = () => {
 
@@ -325,22 +304,10 @@ const clientCountryCode = drGreenClient.country_code || countryCode || 'ZA';
       setOrderComplete(true);
       clearCart();
 
-      // Send confirmation email (fire-and-forget)
-      sendOrderConfirmationEmail({
-        email: drGreenClient.email || '',
-        customerName: drGreenClient.full_name || '',
-        orderId: createdOrderId,
-        items: cart.map(i => ({ strain_name: i.strain_name, quantity: i.quantity, unit_price: i.unit_price })),
-        totalAmount: cartTotal,
-        currency: getCurrencyForCountry(clientCountryCode),
-        shippingAddress,
-        isLocalOrder: false,
-        region: clientCountryCode,
-      });
-      
+      // Confirmation email will be sent automatically by the webhook when Dr. Green pushes order.confirmed
       toast({
         title: finalPaymentStatus === 'PAID' ? 'Order Placed Successfully' : 'Order Submitted',
-        description: `Your order ${createdOrderId} has been ${finalPaymentStatus === 'PAID' ? 'confirmed' : 'submitted for processing'}.`,
+        description: `Your order ${createdOrderId} has been ${finalPaymentStatus === 'PAID' ? 'confirmed' : 'submitted for processing'}. Confirmation email will arrive shortly.`,
       });
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : String(error);
@@ -390,18 +357,7 @@ const clientCountryCode = drGreenClient.country_code || countryCode || 'ZA';
         setOrderComplete(true);
         clearCart();
 
-        // Send confirmation email (fire-and-forget)
-        sendOrderConfirmationEmail({
-          email: drGreenClient.email || '',
-          customerName: drGreenClient.full_name || '',
-          orderId: localOrderId,
-          items: cart.map(i => ({ strain_name: i.strain_name, quantity: i.quantity, unit_price: i.unit_price })),
-          totalAmount: cartTotal,
-          currency: getCurrencyForCountry(clientCountryCode),
-          shippingAddress,
-          isLocalOrder: true,
-          region: clientCountryCode,
-        });
+        // Local fallback order — confirmation email will be sent when admin syncs to Dr. Green
 
         toast({
           title: 'Order Received',

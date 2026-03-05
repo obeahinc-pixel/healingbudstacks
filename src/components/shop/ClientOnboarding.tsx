@@ -830,25 +830,8 @@ export function ClientOnboarding() {
         console.warn('[Registration] Failed to send welcome email:', emailError);
       }
 
-      // Send dedicated KYC verification email if link is available
-      if (kycLink) {
-        try {
-          console.log('[Registration] Sending KYC verification email...');
-          await supabase.functions.invoke('send-client-email', {
-            body: {
-              type: 'kyc-link',
-              email: formData.personal?.email,
-              name: `${formData.personal?.firstName} ${formData.personal?.lastName}`,
-              region: formData.address?.country || 'global',
-              kycLink: kycLink,
-              clientId: clientId,
-            },
-          });
-          console.log('[Registration] KYC verification email sent successfully');
-        } catch (emailError) {
-          console.warn('[Registration] Failed to send KYC email:', emailError);
-        }
-      }
+      // KYC verification email is handled by the webhook when Dr. Green pushes kyc.link_generated
+      // The welcome email above already includes the KYC link if available
 
       // Show appropriate toast based on API success
       if (kycLink) {
