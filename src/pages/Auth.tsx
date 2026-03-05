@@ -244,20 +244,8 @@ const Auth = () => {
       return;
     }
 
-    // Send onboarding email (non-blocking - errors won't affect signup)
-    try {
-      await supabase.functions.invoke('send-onboarding-email', {
-        body: {
-          email: email.trim(),
-          fullName: fullName.trim(),
-          region: 'ZA',
-        },
-      });
-      console.log('Onboarding email triggered successfully');
-    } catch (emailError) {
-      // Log but don't block registration
-      console.error('Failed to send onboarding email:', emailError);
-    }
+    // Welcome email is sent via send-client-email during ClientOnboarding registration
+    // No duplicate onboarding email needed here
 
     setLoading(false);
 
