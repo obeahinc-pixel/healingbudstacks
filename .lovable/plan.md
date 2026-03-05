@@ -1,124 +1,155 @@
 
 
-## Architectural Review: Webhook, Email Functions, and Redundancy Analysis
+# Plan: Price Sovereignty, Commerce SDK, Navigation Fix & Export Readiness
 
-### The Core Question: Do We Need the Webhook?
+## Current State Analysis
 
-**Yes, but for a different reason than strain matching.** The form/calculation logic (medical questionnaire → strain recommendation) is entirely frontend + proxy. The webhook serves a completely different purpose: **receiving push notifications from the Dr. Green API when external state changes** — things your app cannot know about without being told.
+**Prices already come from the API.** Every component (`ProductCard`, `StrainQuickView`, `StrainDetail`, `Cart`, `Checkout`) reads `product.retailPrice` from the Dr. Green API via `useProducts`. There are zero hardcoded prices. The only math is `retailPrice × quantity` — unavoidable since the API doesn't know cart contents.
 
----
+**The real vulnerability:** stale `unit_price` in `drgreen_cart` table. A user adds a strain at R10/g, the API updates to R12/g, the cart still says R10.
 
-### What the Webhook Actually Does (882 lines)
-
-The `drgreen-webhook` handles **6 categories of inbound events from Dr. Green's backend**:
-
-| Event Category | What Triggers It | Can Your App Know Without a Webhook? |
-|---|---|---|
-| `kyc.verified` / `kyc.rejected` | FirstAML completes identity check | **No** — external system |
-| `client.approved` / `client.rejected` | Dr. Green admin reviews patient | **No** — external decision |
-| `order.confirmed` / `order.verified` | Dr. Green confirms payment received | **No** — external payment |
-| `order.shipped` / `order.delivered` | Fulfilment partner updates shipment | **No** — external logistics |
-| `payment.completed` / `payment.failed` | Payment gateway callback | **No** — external gateway |
-| `inventory.*` / `stock.*` | Stock levels change at cultivation | **No** — external supply chain |
-
-**Verdict: The webhook is essential.** These are all external events your app has no way to detect via polling or user input. The webhook is the only way to keep your local DB (`drgreen_clients`, `drgreen_orders`) synchronized with reality.
+**`cartTotalConverted` is dead code** — it equals `cartTotal` on line 93 of `ShopContext.tsx`.
 
 ---
 
-### The Real Problem: Duplicated Email Logic
+## Part 1: TruthProvider + Commerce SDK (`src/lib/commerce.ts`)
 
-You have **6 separate edge functions** that all send emails via Resend:
+### New: `src/lib/commerce.ts` — The "Sovereign Truth" Library
 
-| Function | Purpose | Called From | Overlap? |
-|---|---|---|---|
-| `drgreen-webhook` | KYC/order status emails on API push events | Dr. Green API (external) | **Has its own inline email builder** |
-| `send-order-confirmation` | Order confirmation email | `Checkout.tsx` (frontend) | **Duplicates webhook's order.confirmed email** |
-| `send-onboarding-email` | Welcome email after signup | `Auth.tsx` (frontend) | Unique, but could be in `send-client-email` |
-| `send-client-email` | KYC link, welcome, approval emails | `ClientOnboarding.tsx`, `AdminEmailTrigger.tsx` | **Duplicates webhook's kyc.* and client.* emails** |
-| `send-dispatch-email` | Shipping notification | `useAdminOrderSync.ts` (admin action) | **Duplicates webhook's order.shipped email** |
-| `send-contact-email` | Contact form submission | Contact page | Unique — no overlap |
+A single utility module (not a class — keeps it simple) that encapsulates all financial logic:
 
-**Conflicts found:**
-
-1. **Order confirmation sent twice** — `Checkout.tsx` calls `send-order-confirmation` immediately, AND the webhook sends another confirmation when `order.confirmed` arrives from Dr. Green. Patient gets **2 emails**.
-
-2. **KYC emails sent twice** — `ClientOnboarding.tsx` calls `send-client-email` with type `kyc-link` on registration, AND the webhook sends a KYC email when `kyc.link_generated` arrives. Patient gets **2 emails**.
-
-3. **Shipping emails sent twice** — Admin clicks dispatch in `useAdminOrderSync` which calls `send-dispatch-email`, AND the webhook sends a shipping email when `order.shipped` arrives from Dr. Green.
-
----
-
-### Proposed Architecture: Single Email Gateway
-
-**Consolidate to 3 functions (down from 6):**
-
-| Keep | Purpose | Why |
-|---|---|---|
-| `drgreen-webhook` | Receive external events, update DB, trigger emails | **Single source of truth for API-driven emails** |
-| `send-client-email` | Manual admin-triggered emails + frontend onboarding | **Human-initiated emails only** |
-| `send-contact-email` | Contact form | **Unrelated to patient lifecycle** |
-
-| Remove / Deprecate | Reason |
-|---|---|
-| `send-order-confirmation` | Webhook handles this via `order.confirmed` event |
-| `send-dispatch-email` | Webhook handles this via `order.shipped` event |
-| `send-onboarding-email` | Merge into `send-client-email` as type `welcome` |
-
-**Decision rule:** If Dr. Green API will push the event → let the webhook handle the email. If it's a human action (admin trigger, contact form, signup) → use the dedicated function.
-
----
-
-### Frontend Changes Required
-
-1. **`Checkout.tsx` (line 86):** Remove `send-order-confirmation` call. The order is created via `drgreen-proxy`, Dr. Green API will push `order.confirmed` back through the webhook, which sends the email. Show a toast: "Order placed — confirmation email will arrive shortly."
-
-2. **`ClientOnboarding.tsx` (line 837):** Remove the KYC email call. The webhook handles `kyc.link_generated`. Keep the welcome email call (line 817) since that's user-initiated.
-
-3. **`useAdminOrderSync.ts` (line 414):** Remove `send-dispatch-email` call. The webhook handles `order.shipped`. If admin needs to manually dispatch without Dr. Green knowing, keep it as a fallback with a "manual override" flag.
-
-4. **`Auth.tsx` (line 249):** Move `send-onboarding-email` to call `send-client-email` with type `welcome` instead.
-
----
-
-### Resend: Still Needed
-
-**Yes, Resend is required.** All transactional emails (order confirmations, KYC notifications, shipping updates) are non-auth emails. Lovable's built-in email system only handles auth emails (password reset, magic links). Resend is the correct tool for transactional/lifecycle emails.
-
-**Current Resend setup is correct:**
-- Region-specific send domains (`send.healingbuds.co.za`, `send.healingbuds.pt`, `send.healingbuds.co.uk`)
-- `RESEND_API_KEY` stored as a secret
-- Branded HTML templates with correct logo rules
-
----
-
-### Other Improvements
-
-1. **Dead code:** `exchange-rates` edge function exists but is unused — delete it
-2. **Logo inconsistency:** `send-order-confirmation` still uses old `hb-logo-white.png` (line 51) instead of `hb-logo-white-full.png`
-3. **Realtime publication:** Need to verify `drgreen_clients` and `drgreen_orders` are in `supabase_realtime` publication for the admin dashboard "Live" indicator to work
-4. **`WEBHOOK_TEST_SECRET`:** Still not configured — blocks all webhook testing
-
----
-
-### Summary
-
-```text
-CURRENT STATE:
-  6 email functions → duplicate emails sent to patients
-  Webhook + frontend both trigger same emails
-
-PROPOSED STATE:
-  3 email functions → single source of truth per event type
-  Webhook owns API-driven emails
-  Frontend owns human-initiated emails only
-
-KEEP:     drgreen-webhook, send-client-email, send-contact-email
-REMOVE:   send-order-confirmation, send-dispatch-email, send-onboarding-email
-STILL NEED: Resend (for all transactional emails)
-STILL NEED: Webhook (for external API push events)
+```typescript
+// Price cache, unit processing, cart validation
+export const PriceTruth = {
+  cache: new Map<string, number>(),
+  setPrices(products: { id: string; retailPrice: number }[]),
+  getPrice(strainId: string): number,  // returns 0 if unknown
+  calculateLineTotal(strainId: string, grams: number): number,
+  validateCart(cart: CartItem[]): { corrected: CartItem[]; hasDrift: boolean },
+}
 ```
 
-### Single Next Action
+- **No class**, no `UnitProcessor` class — a plain object with functions. Matches React/Lovable patterns.
+- Unit handling: All products are per-gram. If `retailPrice === 0` or missing, block the transaction (return `{ blocked: true, reason: "Price unavailable" }`).
+- Exported as standalone functions for reuse in Catalog, Cart, and Checkout.
 
-**Deduplicate the email pipeline** — remove the 3 redundant email functions and update the 3 frontend call sites to stop double-sending. This eliminates the "patient gets 2 emails" bug before it hits production.
+### New: `src/context/TruthProvider.tsx`
+
+A thin React Context wrapper around `commerce.ts`:
+- Exposes `getTruthPrice()`, `validateCartPrices()`, `lastRefreshed`
+- Wraps the app in `App.tsx` (inside `ShopProvider`)
+
+### Changes to existing files
+
+| File | Change |
+|---|---|
+| `src/hooks/useProducts.ts` | After fetch, call `PriceTruth.setPrices()`. Remove fallback chain (`pricePerGram`, `pricePerUnit`, `price`) → use only `strain.retailPrice \|\| 0` |
+| `src/context/ShopContext.tsx` | `addToCart`: override `item.unit_price` with `PriceTruth.getPrice(item.strain_id)`. Remove `cartTotalConverted` field. Compute `cartTotal` from truth prices. |
+| `src/components/shop/Cart.tsx` | Replace `cartTotalConverted` → `cartTotal`. Display line prices via `getTruthPrice(strain_id) * quantity`. |
+| `src/components/shop/StrainQuickView.tsx` | Total: `getTruthPrice(product.id) * quantity` (already correct pattern, just source from truth cache) |
+| `src/pages/StrainDetail.tsx` | Same pattern for total display |
+| `src/components/shop/ProductCard.tsx` | No change needed — already uses `product.retailPrice` directly |
+| `src/pages/Checkout.tsx` | On mount: call `validateCartPrices()`. If drift detected, auto-correct DB and show clinical toast before allowing submission. Remove `cartTotalConverted` reference. |
+
+### Clinical error messages
+- **Price drift:** *"Pricing Update: Cart prices have been adjusted to reflect current clinical pricing. Please review before proceeding."*
+- **Price unavailable:** *"Clinical Notice: Price data unavailable for this product. Please refresh or contact support."*
+
+---
+
+## Part 2: Navigation Active State Fix
+
+### File: `src/components/NavigationMenu.tsx`
+
+**Remove:**
+- `border-b-2 border-[#EAB308]` on active (line 46)
+- Gold dot indicator (lines 57-59)
+- Gold icon color for active (line 52)
+
+**Replace with:**
+- Active: `bg-white/10` background, white icon, white 2px bottom underline
+- Hover: gold icon tint, `bg-white/10`, no underline
+- Active underline: `bg-white` instead of `bg-[#EAB308]`
+
+---
+
+## Part 3: Modularization & Export Readiness
+
+### New: `src/config/endpoints.ts`
+
+Centralize all API endpoint configuration:
+```typescript
+export const API_CONFIG = {
+  drgreen: {
+    proxy: 'drgreen-proxy',
+    actions: {
+      getStrains: 'get-strains-legacy',
+      getClient: 'get-client',
+      createClient: 'create-client-legacy',
+      // ... all actions in one place
+    }
+  }
+};
+```
+
+Currently, action strings like `'get-strains-legacy'` are scattered across `useProducts.ts`, `ShopContext.tsx`, `drgreenApi.ts`, `useDrGreenApi.ts`, etc. This centralizes them.
+
+### New: `.env.example`
+
+```
+VITE_SUPABASE_URL=https://your-project.supabase.co
+VITE_SUPABASE_PUBLISHABLE_KEY=your-anon-key
+VITE_SUPABASE_PROJECT_ID=your-project-id
+```
+
+No secrets — just the shape. Prevents export failures.
+
+### Lovable-specific dependency audit
+
+- `lovable-tagger` — dev-only, already stripped in production builds. No risk.
+- `@/integrations/supabase/client.ts` — standard Supabase client, fully portable.
+- All path aliases (`@/`) already configured in `tsconfig.json`. No broken imports on export.
+- `vite.config.ts` base path: currently `/` (correct for Lovable preview), `./` needed for cPanel. The existing `5_build_and_fix.ps1` script handles this. No change needed.
+
+### `src/lib/privacy.ts` — Zero-Retention Middleware
+
+A standalone utility for PII scrubbing, portable to any host:
+```typescript
+export function withPrivacyFilter<T>(data: T): T  // strips email, phone, name from log payloads
+export function sanitizeForLogging(obj: Record<string, unknown>): Record<string, unknown>
+```
+
+This extracts the existing `sanitizeForLogging` pattern from `drgreen-webhook` and `drgreen-proxy` into a shared, importable module.
+
+---
+
+## Part 4: GitHub Action Workflow Update
+
+### File: `.github/workflows/deploy-healingbuds.yml` (existing)
+
+Add a **pre-deploy audit step** that:
+1. Runs `grep -r "DRGREEN_API_KEY\|DRGREEN_PRIVATE_KEY" src/` — fails build if secrets found in frontend code
+2. Runs `grep -r "api.drgreennft.com" src/` — fails build if direct API URLs found in frontend
+3. Validates `.env` variables are set in GitHub Secrets
+
+This enforces Zero-Retention at CI level — no PII or secrets can accidentally ship to production.
+
+---
+
+## Summary of Deliverables
+
+| # | Deliverable | Type |
+|---|---|---|
+| 1 | `src/lib/commerce.ts` | New — Commerce SDK with PriceTruth |
+| 2 | `src/context/TruthProvider.tsx` | New — React Context wrapper |
+| 3 | `src/config/endpoints.ts` | New — Centralized API actions |
+| 4 | `src/lib/privacy.ts` | New — Portable PII scrubber |
+| 5 | `.env.example` | New — Environment template |
+| 6 | `src/hooks/useProducts.ts` | Edit — Remove fallbacks, push to truth cache |
+| 7 | `src/context/ShopContext.tsx` | Edit — Use truth prices, remove `cartTotalConverted` |
+| 8 | `src/components/shop/Cart.tsx` | Edit — Use truth prices |
+| 9 | `src/pages/Checkout.tsx` | Edit — Validate prices on mount |
+| 10 | `src/components/NavigationMenu.tsx` | Edit — Fix active state styling |
+| 11 | `src/App.tsx` | Edit — Add TruthProvider |
+| 12 | `.github/workflows/deploy-healingbuds.yml` | Edit — Add security audit step |
 
