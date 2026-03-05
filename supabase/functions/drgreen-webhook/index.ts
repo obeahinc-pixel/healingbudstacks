@@ -3,7 +3,7 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type, x-webhook-signature',
+  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type, x-webhook-signature, x-test-mode, x-test-secret',
 };
 
 // Log level configuration - defaults to INFO in production
@@ -377,8 +377,14 @@ serve(async (req) => {
     const signature = req.headers.get('x-webhook-signature') || '';
     const privateKey = Deno.env.get("DRGREEN_PRIVATE_KEY");
 
-    // Verify webhook signature (required)
-    if (privateKey && signature) {
+    // Test mode bypass — allows testing without Dr Green API signature
+    const isTestMode = req.headers.get('x-test-mode') === 'true';
+    const testSecret = Deno.env.get('WEBHOOK_TEST_SECRET');
+    const providedTestSecret = req.headers.get('x-test-secret') || '';
+
+    if (isTestMode && testSecret && providedTestSecret === testSecret) {
+      logInfo('Test mode: signature bypass activated');
+    } else if (privateKey && signature) {
       const isValid = await verifyWebhookSignature(rawPayload, signature, privateKey);
       if (!isValid) {
         logError('Invalid webhook signature');
@@ -388,7 +394,6 @@ serve(async (req) => {
         );
       }
     } else if (privateKey) {
-      // If we have a key but no signature, reject
       logError('Missing webhook signature');
       return new Response(
         JSON.stringify({ error: "Missing signature" }),
@@ -409,8 +414,8 @@ serve(async (req) => {
     
     const payload: WebhookPayload = parsedPayload;
     
-    // Validate timestamp to prevent replay attacks
-    if (!validateWebhookTimestamp(payload.timestamp)) {
+    // Validate timestamp to prevent replay attacks (skip in test mode)
+    if (!isTestMode && !validateWebhookTimestamp(payload.timestamp)) {
       logError('Webhook timestamp validation failed');
       return new Response(
         JSON.stringify({ error: "Webhook expired or invalid timestamp" }),
