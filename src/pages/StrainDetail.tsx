@@ -29,7 +29,7 @@ import { FloatingCartButton } from '@/components/shop/FloatingCartButton';
 export default function StrainDetail() {
   const { strainId } = useParams<{ strainId: string }>();
   const navigate = useNavigate();
-  const { addToCart, isEligible, drGreenClient, countryCode } = useShop();
+  const { addToCart, isEligible, drGreenClient, countryCode, convertFromEUR } = useShop();
   const { products, isLoading } = useProducts(countryCode);
   const { toast } = useToast();
   const DENOMINATIONS = [2, 5, 10] as const;
@@ -265,11 +265,11 @@ export default function StrainDetail() {
                   </p>
                 </div>
 
-                {/* Price - fixed local price from API */}
+                {/* Price - converted from EUR to user's currency */}
                 <div className="flex items-baseline gap-3">
                   <PriceBreakdownTooltip>
                     <span className="text-4xl font-bold text-primary">
-                      {formatPrice(product.retailPrice, countryCode)}
+                      {formatPrice(convertFromEUR(product.retailPrice), countryCode)}
                     </span>
                   </PriceBreakdownTooltip>
                   <span className="text-lg text-muted-foreground">per gram</span>
@@ -329,7 +329,7 @@ export default function StrainDetail() {
                   <div className="flex items-center justify-between">
                     <span className="text-muted-foreground">Total:</span>
                     <span className="text-3xl font-bold text-primary">
-                      {formatPrice(product.retailPrice * selectedDenomination, countryCode)}
+                      {formatPrice(convertFromEUR(product.retailPrice * selectedDenomination), countryCode)}
                     </span>
                   </div>
 

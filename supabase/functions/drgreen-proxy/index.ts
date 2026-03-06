@@ -2124,26 +2124,28 @@ serve(async (req) => {
       // with proper payload formatting (clientId, productId)
       
       
-      // Remove from cart - DELETE /dapp/carts/:cartId?strainId=xxx (no body)
+      // Remove from cart (Method A - Body Sign for signature, query for strainId) - uses /dapp/carts endpoint
       case "remove-from-cart": {
         const { cartId, strainId } = body || {};
         if (!cartId || !strainId) throw new Error("cartId and strainId are required");
         
+        // Validate inputs
         if (!validateStringLength(cartId, 100) || !validateStringLength(strainId, 100)) {
           throw new Error("Invalid ID format");
         }
         
+        // Sign the JSON payload with secp256k1 using write credentials
+        const signPayloadData = { cartId };
+        const payloadStr = JSON.stringify(signPayloadData);
         const writeEnv = envConfig;
         const { apiKey: writeApiKey, privateKey: writePrivKey } = getEnvCredentials(writeEnv);
         if (!writeApiKey || !writePrivKey) {
           throw new Error(`Write credentials not configured for remove-from-cart (${writeEnv.apiKeyEnv})`);
         }
+        const signature = await generateSecp256k1Signature(payloadStr, writePrivKey);
         
-        // Sign the query string (not a body) — API expects no body on DELETE
-        const queryString = `strainId=${strainId}`;
-        const signature = await generateSecp256k1Signature(queryString, writePrivKey);
-        
-        const apiUrl = `${writeEnv.apiUrl}/dapp/carts/${cartId}?${queryString}`;
+        const apiKey = writeApiKey;
+        const apiUrl = `${writeEnv.apiUrl}/dapp/carts/${cartId}?strainId=${strainId}`;
         
         logInfo(`Removing item from cart via /dapp/carts endpoint`);
         
@@ -2154,9 +2156,10 @@ serve(async (req) => {
           method: "DELETE",
           headers: {
             "Content-Type": "application/json",
-            "x-auth-apikey": writeApiKey,
+            "x-auth-apikey": apiKey,
             "x-auth-signature": signature,
           },
+          body: payloadStr,
           signal: controller.signal,
         });
         
@@ -2701,7 +2704,7 @@ serve(async (req) => {
         break;
       }
       
-      // Empty/delete cart - DELETE /dapp/carts/:clientId (no body)
+      // Empty/delete cart - DELETE /dapp/carts/:clientId
       case "empty-cart": {
         const cartId = body.cartId;
         if (!cartId) {
@@ -2710,28 +2713,8 @@ serve(async (req) => {
         if (!validateStringLength(cartId, 100)) {
           throw new Error("Invalid cart ID format");
         }
-        
-        const env = adminEnvConfig;
-        const { apiKey, privateKey: secretKey } = getEnvCredentials(env);
-        if (!apiKey || !secretKey) throw new Error("Credentials not configured");
-        
-        // Sign empty string — no body or query params
-        const signature = await generateSecp256k1Signature("", secretKey);
-        
-        const controller = new AbortController();
-        const timeoutId = setTimeout(() => controller.abort(), API_TIMEOUT_MS);
-        
-        response = await fetch(`${env.apiUrl}/dapp/carts/${cartId}`, {
-          method: "DELETE",
-          headers: {
-            "Content-Type": "application/json",
-            "x-auth-apikey": apiKey,
-            "x-auth-signature": signature,
-          },
-          signal: controller.signal,
-        });
-        
-        clearTimeout(timeoutId);
+        // DELETE /dapp/carts/:clientId clears the cart
+        response = await drGreenRequest(`/dapp/carts/${cartId}`, "DELETE", undefined, adminEnvConfig);
         break;
       }
       

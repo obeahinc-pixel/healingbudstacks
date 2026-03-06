@@ -1,13 +1,15 @@
 import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
+import { useExchangeRates } from '@/hooks/useExchangeRates';
+import { updateCachedRates } from '@/lib/currency';
 
 interface CartItem {
   id: string;
   strain_id: string;
   strain_name: string;
   quantity: number;
-  unit_price: number; // Fixed/local price from Dr Green API (already in correct currency)
+  unit_price: number; // Always in EUR from Dr Green API
 }
 
 interface DrGreenClient {
@@ -18,17 +20,26 @@ interface DrGreenClient {
   is_kyc_verified: boolean;
   admin_approval: string;
   kyc_link: string | null;
+  // Additional fields from database
   email?: string | null;
   full_name?: string | null;
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   shipping_address?: any;
 }
 
+interface ExchangeRatesData {
+  ZAR: number;
+  EUR: number;
+  GBP: number;
+  USD: number;
+  THB: number;
+}
+
 interface ShopContextType {
   cart: CartItem[];
   cartCount: number;
   cartTotal: number;
-  cartTotalConverted: number; // Same as cartTotal — no conversion needed
+  cartTotalConverted: number; // In user's currency
   isCartOpen: boolean;
   setIsCartOpen: (open: boolean) => void;
   addToCart: (item: Omit<CartItem, 'id'>) => Promise<void>;
@@ -43,9 +54,24 @@ interface ShopContextType {
   isSyncing: boolean;
   countryCode: string;
   setCountryCode: (code: string) => void;
+  // Exchange rates
+  exchangeRates: ExchangeRatesData | null;
+  convertFromEUR: (amount: number, toCountry?: string) => number;
+  /** @deprecated Use convertFromEUR instead - API returns EUR prices */
+  convertFromZAR: (amount: number, toCountry?: string) => number;
+  ratesLastUpdated: Date | null;
 }
 
 const ShopContext = createContext<ShopContextType | undefined>(undefined);
+
+// Currency mapping
+const COUNTRY_TO_CURRENCY: Record<string, keyof ExchangeRatesData> = {
+  PT: 'EUR',
+  ZA: 'ZAR',
+  GB: 'GBP',
+  TH: 'THB',
+  US: 'USD',
+};
 
 // Get country code from domain (URL-first strategy)
 function getCountryFromDomain(): string {
@@ -76,6 +102,7 @@ function getCountryFromDomain(): string {
 }
 
 export function ShopProvider({ children }: { children: React.ReactNode }) {
+  const { rates, lastUpdated, convertPrice } = useExchangeRates();
   const [cart, setCart] = useState<CartItem[]>([]);
   const [isCartOpen, setIsCartOpen] = useState(false);
   const [drGreenClient, setDrGreenClient] = useState<DrGreenClient | null>(null);
@@ -85,12 +112,29 @@ export function ShopProvider({ children }: { children: React.ReactNode }) {
   const [countryCode, setCountryCode] = useState<string>(() => getCountryFromDomain());
   const { toast } = useToast();
 
+  // Update cached rates when they change
+  useEffect(() => {
+    if (rates) {
+      updateCachedRates(rates);
+    }
+  }, [rates]);
 
   const cartCount = cart.reduce((sum, item) => sum + item.quantity, 0);
   const cartTotal = cart.reduce((sum, item) => sum + item.quantity * item.unit_price, 0);
   
-  // Prices are fixed/local from the API — no conversion needed
-  const cartTotalConverted = cartTotal;
+  // Convert cart total to user's currency (API returns prices in EUR)
+  const convertFromEUR = useCallback((amount: number, toCountry?: string): number => {
+    const targetCountry = toCountry || countryCode;
+    return convertPrice(amount, 'EUR', targetCountry);
+  }, [convertPrice, countryCode]);
+
+  // Keep legacy function for backwards compatibility
+  const convertFromZAR = useCallback((amount: number, toCountry?: string): number => {
+    const targetCountry = toCountry || countryCode;
+    return convertPrice(amount, 'EUR', targetCountry); // Actually converts from EUR now
+  }, [convertPrice, countryCode]);
+
+  const cartTotalConverted = convertFromEUR(cartTotal);
   
   const isEligible = drGreenClient?.is_kyc_verified === true && drGreenClient?.admin_approval === 'VERIFIED';
 
@@ -487,6 +531,10 @@ export function ShopProvider({ children }: { children: React.ReactNode }) {
         isSyncing,
         countryCode,
         setCountryCode,
+        exchangeRates: rates,
+        convertFromEUR,
+        convertFromZAR, // deprecated, but kept for compatibility
+        ratesLastUpdated: lastUpdated,
       }}
     >
       {children}
