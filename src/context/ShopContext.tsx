@@ -30,8 +30,6 @@ interface ShopContextType {
   cart: CartItem[];
   cartCount: number;
   cartTotal: number;
-  /** @deprecated Use cartTotal — no conversion needed */
-  cartTotalConverted: number;
   isCartOpen: boolean;
   setIsCartOpen: (open: boolean) => void;
   addToCart: (item: Omit<CartItem, 'id'>) => Promise<void>;
@@ -92,8 +90,6 @@ export function ShopProvider({ children }: { children: React.ReactNode }) {
   const cartCount = cart.reduce((sum, item) => sum + item.quantity, 0);
   const cartTotal = cart.reduce((sum, item) => sum + item.quantity * item.unit_price, 0);
   
-  // Prices are fixed/local from the API — no conversion needed
-  const cartTotalConverted = cartTotal;
   
   const isEligible = drGreenClient?.is_kyc_verified === true && drGreenClient?.admin_approval === 'VERIFIED';
 
@@ -501,7 +497,6 @@ export function ShopProvider({ children }: { children: React.ReactNode }) {
         cart,
         cartCount,
         cartTotal,
-        cartTotalConverted,
         isCartOpen,
         setIsCartOpen,
         addToCart,
