@@ -154,7 +154,7 @@ CREATE TYPE public.app_role AS ENUM ('admin', 'moderator', 'user');
 | `drgreen-api-tests` | ✅ default | API integration test runner |
 | `drgreen-comparison` | ✅ default | Cross-environment API comparison |
 | `drgreen-webhook` | ❌ likely | Inbound webhooks from Dr. Green |
-
+| `exchange-rates` | ✅ default | Currency exchange rate fetcher |
 | `generate-product-image` | ✅ default | AI product image generation |
 | `batch-generate-images` | ✅ default | Bulk product image generation |
 | `sync-strains` | ✅ default | Sync strains from Dr. Green API |
@@ -163,9 +163,9 @@ CREATE TYPE public.app_role AS ENUM ('admin', 'moderator', 'user');
 | `send-client-email` | ✅ default | Transactional email to clients |
 | `send-contact-email` | ✅ default | Contact form email handler |
 | `send-onboarding-email` | ✅ default | New client onboarding email |
-
+| `prescription-expiry-check` | ✅ default | Check for expiring prescriptions |
 | `admin-update-user` | ✅ default | Admin user management |
-
+| `upload-email-logo` | ✅ default | Upload logo to email-assets bucket |
 | `upload-jar-template` | ✅ default | Upload jar template for image gen |
 
 ---

@@ -64,7 +64,7 @@ const DRGREEN_ADMIN_URL = "https://dapp.drgreennft.com";
 
 export function AdminClientManager() {
   const { toast } = useToast();
-  const { getDappClients, syncClientStatus, reregisterClient, getDappClientDetails } = useDrGreenApi();
+  const { getDappClients, getClientsSummary, syncClientStatus, reregisterClient, getDappClientDetails } = useDrGreenApi();
   
   const [clients, setClients] = useState<DrGreenClient[]>([]);
   const [summary, setSummary] = useState<ClientsSummary | null>(null);
@@ -173,7 +173,10 @@ export function AdminClientManager() {
         clientParams.searchBy = "email";
       }
 
-      const clientsResult = await getDappClients(clientParams as Parameters<typeof getDappClients>[0]);
+      const [clientsResult, summaryResult] = await Promise.all([
+        getDappClients(clientParams as Parameters<typeof getDappClients>[0]),
+        getClientsSummary(),
+      ]);
 
       if (clientsResult.error) {
         console.error("Error fetching clients:", clientsResult.error);
@@ -183,18 +186,22 @@ export function AdminClientManager() {
           variant: "destructive",
         });
       } else {
+        // Handle nested data structure from API: { success, statusCode, message, data: { clients: [...] } }
         const responseData = clientsResult.data as unknown as { data?: { clients?: DrGreenClient[] } };
         const clientsList = responseData?.data?.clients || (clientsResult.data as { clients?: DrGreenClient[] })?.clients;
         if (clientsList) {
           setClients(clientsList);
-          syncClientsToLocalDb(clientsList);
           
-          // Derive summary from fetched clients
-          const pending = clientsList.filter((c: DrGreenClient) => c.adminApproval === 'PENDING').length;
-          const verified = clientsList.filter((c: DrGreenClient) => c.adminApproval === 'VERIFIED').length;
-          const rejected = clientsList.filter((c: DrGreenClient) => c.adminApproval === 'REJECTED').length;
-          setSummary({ PENDING: pending, VERIFIED: verified, REJECTED: rejected, totalCount: clientsList.length });
+          // Background sync: upsert fetched clients into local drgreen_clients table
+          syncClientsToLocalDb(clientsList);
         }
+      }
+
+      // Handle nested summary structure: { success, statusCode, message, data: { summary: {...} } }
+      const summaryData = summaryResult.data as unknown as { data?: { summary?: ClientsSummary } };
+      const summaryObj = summaryData?.data?.summary || (summaryResult.data as { summary?: ClientsSummary })?.summary;
+      if (summaryObj) {
+        setSummary(summaryObj);
       }
 
       if (showToast) {
@@ -211,7 +218,7 @@ export function AdminClientManager() {
       setIsRefetching(false);
       setInitialLoadComplete(true);
     }
-  }, [getDappClients, toast]);
+  }, [getDappClients, getClientsSummary, toast]);
 
   // Initial load effect - runs once on mount
   useEffect(() => {
@@ -258,8 +265,13 @@ export function AdminClientManager() {
           });
         }
         
-        // Refresh data
-        await fetchData({});
+        // Refresh summary counts
+        const summaryResult = await getClientsSummary();
+        const summaryData = summaryResult.data as unknown as { data?: { summary?: ClientsSummary } };
+        const summaryObj = summaryData?.data?.summary || (summaryResult.data as { summary?: ClientsSummary })?.summary;
+        if (summaryObj) {
+          setSummary(summaryObj);
+        }
       }
     } catch (err) {
       console.error("Sync error:", err);

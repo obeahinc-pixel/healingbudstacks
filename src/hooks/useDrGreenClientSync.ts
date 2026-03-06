@@ -36,7 +36,7 @@ interface ClientSummary {
 }
 
 export function useDrGreenClientSync() {
-  const { getDappClients, getDappOrders } = useDrGreenApi();
+  const { getDappClients, getClientsSummary } = useDrGreenApi();
   const { toast } = useToast();
   const [syncing, setSyncing] = useState(false);
   const [clients, setClients] = useState<DrGreenClient[]>([]);
@@ -47,16 +47,20 @@ export function useDrGreenClientSync() {
   // Fetch all clients from Dr. Green API
   const fetchClients = useCallback(async (page = 1, take = 50) => {
     setError(null);
+    
     try {
       const { data, error: apiError } = await getDappClients({ page, take, orderBy: 'desc' });
+      
       if (apiError) {
         setError(apiError);
         return { clients: [], total: 0 };
       }
+
       if (data?.clients) {
         setClients(data.clients as unknown as DrGreenClient[]);
         return { clients: data.clients as unknown as DrGreenClient[], total: data.total || 0 };
       }
+
       return { clients: [], total: 0 };
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Failed to fetch clients';
@@ -65,37 +69,49 @@ export function useDrGreenClientSync() {
     }
   }, [getDappClients]);
 
-  // Compute summary from fetched clients
+  // Fetch client summary (PENDING/VERIFIED/REJECTED counts)
   const fetchSummary = useCallback(async () => {
     try {
-      const { clients: allClients, total } = await fetchClients(1, 100);
-      if (allClients.length > 0) {
+      const { data, error: apiError } = await getClientsSummary();
+      
+      if (apiError) {
+        console.error('Failed to fetch summary:', apiError);
+        return null;
+      }
+
+      if (data?.summary) {
         const summaryData: ClientSummary = {
-          total,
-          verified: allClients.filter((c: any) => c.adminApproval === 'VERIFIED').length,
-          pending: allClients.filter((c: any) => c.adminApproval === 'PENDING').length,
-          rejected: allClients.filter((c: any) => c.adminApproval === 'REJECTED').length,
-          kycVerified: allClients.filter((c: any) => c.isKYCVerified).length,
+          total: data.summary.totalCount || 0,
+          verified: data.summary.VERIFIED || 0,
+          pending: data.summary.PENDING || 0,
+          rejected: data.summary.REJECTED || 0,
+          kycVerified: data.summary.VERIFIED || 0, // KYC verified = admin verified
         };
         setSummary(summaryData);
         return summaryData;
       }
+
       return null;
     } catch (err) {
       console.error('Failed to fetch summary:', err);
       return null;
     }
-  }, [fetchClients]);
+  }, [getClientsSummary]);
 
   // Sync Dr. Green clients to local Supabase table
   const syncClientsToSupabase = useCallback(async (): Promise<SyncResult> => {
     setSyncing(true);
     setError(null);
     
-    const result: SyncResult = { synced: 0, created: 0, updated: 0, errors: [] };
+    const result: SyncResult = {
+      synced: 0,
+      created: 0,
+      updated: 0,
+      errors: [],
+    };
 
     try {
-      // Fetch all clients from Dr. Green (paginate)
+      // Fetch all clients from Dr. Green (paginate if needed)
       let allClients: DrGreenClient[] = [];
       let page = 1;
       const take = 50;
@@ -106,22 +122,31 @@ export function useDrGreenClientSync() {
         allClients = [...allClients, ...pageClients];
         hasMore = allClients.length < total;
         page++;
+        
+        // Safety limit
         if (page > 20) break;
       }
 
-      // Upsert each client to local DB
+      // For each Dr. Green client, upsert to Supabase
       for (const client of allClients) {
         try {
+          // Check if client exists by drgreen_client_id
           const { data: existing } = await supabase
             .from('drgreen_clients')
             .select('id, is_kyc_verified, admin_approval')
             .eq('drgreen_client_id', client.id)
             .maybeSingle();
 
-          const countryCode = client.shippings?.[0]?.country || client.phoneCountryCode || 'PT';
+          const countryCode = client.shippings?.[0]?.country || 
+                              client.phoneCountryCode || 
+                              'PT';
 
           if (existing) {
-            if (existing.is_kyc_verified !== client.isKYCVerified || existing.admin_approval !== client.adminApproval) {
+            // Update existing record if status changed
+            if (
+              existing.is_kyc_verified !== client.isKYCVerified ||
+              existing.admin_approval !== client.adminApproval
+            ) {
               const { error: updateError } = await supabase
                 .from('drgreen_clients')
                 .update({
@@ -142,8 +167,9 @@ export function useDrGreenClientSync() {
             }
             result.synced++;
           } else {
-            // Try to find a matching auth user by email to link
-            console.log(`External client (no local record): ${client.email}`);
+            // We can't create records without a user_id, so log these as "external clients"
+            // They'll be linked when the user signs up with matching email
+            console.log(`External client (no Supabase user): ${client.email}`);
             result.synced++;
           }
         } catch (clientErr) {
@@ -151,15 +177,12 @@ export function useDrGreenClientSync() {
         }
       }
 
-      // Also sync orders from Dr. Green API
-      await syncOrdersFromApi(result);
-
       setClients(allClients);
       setLastSyncAt(new Date());
 
       toast({
         title: 'Sync Complete',
-        description: `${result.synced} clients, ${result.updated} updated. Orders synced.`,
+        description: `${result.synced} clients synced. ${result.updated} updated.`,
       });
 
       return result;
@@ -167,94 +190,44 @@ export function useDrGreenClientSync() {
       const message = err instanceof Error ? err.message : 'Sync failed';
       setError(message);
       result.errors.push(message);
-      toast({ title: 'Sync Failed', description: message, variant: 'destructive' });
+      
+      toast({
+        title: 'Sync Failed',
+        description: message,
+        variant: 'destructive',
+      });
+
       return result;
     } finally {
       setSyncing(false);
     }
   }, [fetchClients, toast]);
 
-  // Sync orders from Dr. Green API to local drgreen_orders table
-  const syncOrdersFromApi = useCallback(async (result: SyncResult) => {
+  // Check if a specific client is verified and approved on Dr. Green
+  const checkClientStatus = useCallback(async (email: string): Promise<{
+    exists: boolean;
+    isKYCVerified: boolean;
+    adminApproval: string;
+    drGreenClientId: string | null;
+  }> => {
     try {
-      let allOrders: any[] = [];
-      let page = 1;
-      const take = 50;
-      let hasMore = true;
-
-      while (hasMore) {
-        const { data, error: apiError } = await getDappOrders({ page, take, orderBy: 'desc' });
-        if (apiError || !data?.orders) break;
-        allOrders = [...allOrders, ...data.orders];
-        hasMore = allOrders.length < (data.total || 0);
-        page++;
-        if (page > 20) break;
-      }
-
-      // Get current user for user_id (admin performing sync)
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user) return;
-
-      for (const order of allOrders) {
-        try {
-          const { data: existing } = await supabase
-            .from('drgreen_orders')
-            .select('id, status, payment_status')
-            .eq('drgreen_order_id', order.id)
-            .maybeSingle();
-
-          if (existing) {
-            // Update if status changed
-            const newStatus = order.orderStatus || order.status || 'PENDING';
-            const newPayment = order.paymentStatus || 'PENDING';
-            if (existing.status !== newStatus || existing.payment_status !== newPayment) {
-              await supabase.from('drgreen_orders').update({
-                status: newStatus,
-                payment_status: newPayment,
-                total_amount: order.totalAmount || order.totalPrice || 0,
-                synced_at: new Date().toISOString(),
-                sync_status: 'synced',
-                updated_at: new Date().toISOString(),
-              }).eq('id', existing.id);
-            }
-          } else {
-            // Insert new order
-            await supabase.from('drgreen_orders').insert({
-              drgreen_order_id: order.id,
-              user_id: user.id,
-              status: order.orderStatus || order.status || 'PENDING',
-              payment_status: order.paymentStatus || 'PENDING',
-              total_amount: order.totalAmount || order.totalPrice || 0,
-              items: order.items || [],
-              client_id: order.clientId || null,
-              customer_email: order.client?.email || null,
-              customer_name: order.client ? `${order.client.firstName || ''} ${order.client.lastName || ''}`.trim() : null,
-              country_code: order.client?.shippings?.[0]?.country || null,
-              currency: order.currency || 'EUR',
-              synced_at: new Date().toISOString(),
-              sync_status: 'synced',
-            });
-            result.created++;
-          }
-        } catch (orderErr) {
-          result.errors.push(`Order ${order.id}: ${orderErr instanceof Error ? orderErr.message : 'Unknown'}`);
-        }
-      }
-    } catch (err) {
-      console.error('Order sync error:', err);
-      result.errors.push(`Order sync: ${err instanceof Error ? err.message : 'Unknown'}`);
-    }
-  }, [getDappOrders]);
-
-  // Check if a specific client is verified
-  const checkClientStatus = useCallback(async (email: string) => {
-    try {
-      const { data, error: apiError } = await getDappClients({ search: email, searchBy: 'email', take: 1 });
+      const { data, error: apiError } = await getDappClients({ 
+        search: email, 
+        searchBy: 'email',
+        take: 1 
+      });
+      
       if (apiError || !data?.clients?.length) {
         return { exists: false, isKYCVerified: false, adminApproval: 'PENDING', drGreenClientId: null };
       }
+
       const client = data.clients[0] as unknown as DrGreenClient;
-      return { exists: true, isKYCVerified: client.isKYCVerified, adminApproval: client.adminApproval, drGreenClientId: client.id };
+      return {
+        exists: true,
+        isKYCVerified: client.isKYCVerified,
+        adminApproval: client.adminApproval,
+        drGreenClientId: client.id,
+      };
     } catch {
       return { exists: false, isKYCVerified: false, adminApproval: 'PENDING', drGreenClientId: null };
     }
@@ -264,29 +237,46 @@ export function useDrGreenClientSync() {
   const linkUserToClient = useCallback(async (userId: string, email: string): Promise<boolean> => {
     try {
       const status = await checkClientStatus(email);
-      if (!status.exists || !status.drGreenClientId) return false;
+      
+      if (!status.exists || !status.drGreenClientId) {
+        console.log(`No Dr. Green client found for email: ${email}`);
+        return false;
+      }
 
+      // Check if already linked
       const { data: existing } = await supabase
-        .from('drgreen_clients').select('id').eq('user_id', userId).maybeSingle();
+        .from('drgreen_clients')
+        .select('id')
+        .eq('user_id', userId)
+        .maybeSingle();
 
       if (existing) {
-        const { error } = await supabase.from('drgreen_clients').update({
-          drgreen_client_id: status.drGreenClientId,
-          is_kyc_verified: status.isKYCVerified,
-          admin_approval: status.adminApproval,
-          email,
-          updated_at: new Date().toISOString(),
-        }).eq('id', existing.id);
+        // Update existing record
+        const { error } = await supabase
+          .from('drgreen_clients')
+          .update({
+            drgreen_client_id: status.drGreenClientId,
+            is_kyc_verified: status.isKYCVerified,
+            admin_approval: status.adminApproval,
+            email,
+            updated_at: new Date().toISOString(),
+          })
+          .eq('id', existing.id);
+
         return !error;
       } else {
-        const { error } = await supabase.from('drgreen_clients').insert({
-          user_id: userId,
-          drgreen_client_id: status.drGreenClientId,
-          is_kyc_verified: status.isKYCVerified,
-          admin_approval: status.adminApproval,
-          email,
-          country_code: 'PT',
-        });
+        // Create new record
+        const { error } = await supabase
+          .from('drgreen_clients')
+          .insert({
+            user_id: userId,
+            drgreen_client_id: status.drGreenClientId,
+            is_kyc_verified: status.isKYCVerified,
+            admin_approval: status.adminApproval,
+            email,
+            country_code: 'PT', // Default, will be updated on sync
+          });
+
         return !error;
       }
     } catch (err) {
@@ -295,12 +285,28 @@ export function useDrGreenClientSync() {
     }
   }, [checkClientStatus]);
 
+  // Refresh all data
   const refresh = useCallback(async () => {
-    await Promise.all([fetchClients(), fetchSummary()]);
+    await Promise.all([
+      fetchClients(),
+      fetchSummary(),
+    ]);
   }, [fetchClients, fetchSummary]);
 
   return {
-    clients, summary, syncing, error, lastSyncAt,
-    fetchClients, fetchSummary, syncClientsToSupabase, checkClientStatus, linkUserToClient, refresh,
+    // State
+    clients,
+    summary,
+    syncing,
+    error,
+    lastSyncAt,
+    
+    // Actions
+    fetchClients,
+    fetchSummary,
+    syncClientsToSupabase,
+    checkClientStatus,
+    linkUserToClient,
+    refresh,
   };
 }

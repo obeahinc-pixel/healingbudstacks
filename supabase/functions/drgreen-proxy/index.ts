@@ -15,7 +15,7 @@ secp256k1.etc.hmacSha256Sync = (key: Uint8Array, ...messages: Uint8Array[]) => {
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version',
+  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
 
 // Log level configuration - defaults to INFO in production
@@ -83,7 +83,6 @@ function sanitizeForLogging(data: Record<string, unknown>): Record<string, unkno
 // Admin-only actions that require admin role
 const ADMIN_ACTIONS = [
   'dashboard-summary', 'dashboard-analytics', 'sales-summary',
-  'get-clients-summary', 'get-sales',
   'dapp-clients', 'dapp-client-details', 'dapp-verify-client',
   'dapp-orders', 'dapp-order-details', 'dapp-update-order',
   'dapp-carts', 'dapp-nfts', 'dapp-strains', 'dapp-clients-list',
@@ -3121,11 +3120,10 @@ serve(async (req) => {
         if (!validateClientId(body.clientId)) {
           throw new Error("Invalid client ID format");
         }
-        // Correct endpoint: GET /dapp/orders with clientIds filter
-        // The endpoint /dapp/clients/{id}/orders does NOT exist in Dr. Green API
+        // Use query string signing for GET endpoints (fixes 401 / empty responses)
         response = await drGreenRequestGet(
-          `/dapp/orders`,
-          { clientIds: body.clientId, orderBy: 'desc', take: 50, page: 1 },
+          `/dapp/clients/${body.clientId}/orders`,
+          { orderBy: 'desc', take: 50, page: 1 },
           false,
           adminEnvConfig
         );
@@ -4050,8 +4048,7 @@ serve(async (req) => {
       }
       
       case "get-client-orders": {
-        // GET /dapp/orders with clientIds filter - correct endpoint
-        // The endpoint /dapp/client/{id}/orders does NOT exist
+        // GET /dapp/client/:clientId/orders - Get orders for specific client
         if (!validateClientId(body.clientId)) {
           throw new Error("Invalid client ID format");
         }
@@ -4062,13 +4059,12 @@ serve(async (req) => {
         }
         
         const queryParams: Record<string, string | number> = {
-          clientIds: body.clientId,
           orderBy: orderBy || 'desc',
           take: take || 10,
           page: page || 1,
         };
         
-        response = await drGreenRequestQuery(`/dapp/orders`, queryParams);
+        response = await drGreenRequestQuery(`/dapp/client/${body.clientId}/orders`, queryParams);
         break;
       }
       

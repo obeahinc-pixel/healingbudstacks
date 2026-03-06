@@ -214,75 +214,18 @@ export function ShopProvider({ children }: { children: React.ReactNode }) {
     }
   }, [toast]);
 
-  // Background: fetch live status from Dr. Green API and update state + cache
-  const fetchLiveStatusInBackground = useCallback((localRecord: DrGreenClient, userId: string) => {
-    if (!localRecord.drgreen_client_id || localRecord.drgreen_client_id.startsWith('local-')) return;
-
-    console.log('[ShopContext] Background: fetching live status from Dr. Green API...');
-    supabase.functions.invoke('drgreen-proxy', {
-      body: {
-        action: 'get-client',
-        clientId: localRecord.drgreen_client_id,
-      },
-    }).then(({ data: apiResponse, error: apiError }) => {
-      const liveData = apiResponse?.data || apiResponse;
-      if (!apiError && liveData && (liveData.isKYCVerified !== undefined || liveData.adminApproval !== undefined)) {
-        const liveKyc = liveData.isKYCVerified ?? liveData.is_kyc_verified ?? false;
-        const liveApproval = liveData.adminApproval ?? liveData.admin_approval ?? 'PENDING';
-        const liveKycLink = liveData.kycLink ?? liveData.kyc_link ?? null;
-
-        // Update React state with live data
-        setDrGreenClient(prev => prev ? {
-          ...prev,
-          is_kyc_verified: liveKyc,
-          admin_approval: liveApproval,
-          kyc_link: liveKycLink,
-        } : prev);
-
-        // Update local cache if changed (fire-and-forget)
-        if (
-          localRecord.is_kyc_verified !== liveKyc ||
-          localRecord.admin_approval !== liveApproval ||
-          localRecord.kyc_link !== liveKycLink
-        ) {
-          console.log('[ShopContext] Background: status changed, updating cache...');
-          supabase
-            .from('drgreen_clients')
-            .update({
-              is_kyc_verified: liveKyc,
-              admin_approval: liveApproval,
-              kyc_link: liveKycLink,
-              updated_at: new Date().toISOString(),
-            })
-            .eq('user_id', userId)
-            .then(({ error: updateErr }) => {
-              if (updateErr) console.error('[ShopContext] Cache update error:', updateErr);
-            });
-        }
-      } else {
-        console.warn('[ShopContext] Background: could not fetch live status');
-      }
-    }).catch(err => {
-      console.warn('[ShopContext] Background: API call failed:', err);
-    });
-  }, []);
-
   const fetchClient = useCallback(async () => {
     // Use getSession first - it's synchronous from cache and avoids race conditions
-    const { data: { session }, error: sessionError } = await supabase.auth.getSession();
-    
-    // Handle stale/invalid sessions gracefully
-    if (sessionError || !session?.user) {
-      if (sessionError) {
-        console.warn('[ShopContext] Session error (stale token?), clearing state:', sessionError.message);
-      }
+    // getUser() can fail during initial auth state recovery
+    const { data: { session } } = await supabase.auth.getSession();
+    if (!session?.user) {
       setDrGreenClient(null);
       setIsLoading(false);
       return;
     }
     const user = session.user;
 
-    // Step 1: Check local mapping (fast DB query)
+    // Step 1: Check if we have a local mapping (user_id → drgreen_client_id)
     const { data: localRecord, error } = await supabase
       .from('drgreen_clients')
       .select('*')
@@ -291,44 +234,90 @@ export function ShopProvider({ children }: { children: React.ReactNode }) {
 
     if (error) {
       console.error('Error fetching client mapping:', error);
-      // If it's an auth error (stale token), clear state
-      if (error.message?.includes('JWT') || error.code === 'PGRST301') {
-        setDrGreenClient(null);
-        setIsLoading(false);
-        return;
-      }
     }
 
-    // Step 2: If local record exists → set state immediately, then background-sync
-    if (localRecord) {
-      setDrGreenClient(localRecord);
-      setIsLoading(false); // ← Login unblocked here
-      // Fire-and-forget: update from live API in background
-      fetchLiveStatusInBackground(localRecord, user.id);
-      return;
-    }
-
-    // Step 3: No local mapping → set loading false immediately, run discovery in background
-    console.log('[ShopContext] No local client mapping, running auto-discovery in background...');
-    setDrGreenClient(null);
-    setIsLoading(false); // ← Login unblocked here too
-
-    // Background auto-discovery
-    linkClientFromDrGreenByAuthEmail(user.id, true).then(linked => {
+    // Step 2: If no local mapping, try auto-discovery from Dr. Green API
+    if (!localRecord) {
+      console.log('[ShopContext] No local client mapping, attempting auto-discovery...');
+      const linked = await linkClientFromDrGreenByAuthEmail(user.id, true);
+      
       if (linked) {
-        supabase
+        // Refetch the newly created mapping
+        const { data: newRecord } = await supabase
           .from('drgreen_clients')
           .select('*')
           .eq('user_id', user.id)
-          .maybeSingle()
-          .then(({ data: newRecord }) => {
-            if (newRecord) {
-              setDrGreenClient(newRecord);
-            }
-          });
+          .maybeSingle();
+        
+        if (newRecord) {
+          setDrGreenClient(newRecord);
+        }
       }
-    });
-  }, [linkClientFromDrGreenByAuthEmail, fetchLiveStatusInBackground]);
+      setIsLoading(false);
+      return;
+    }
+
+    // Step 3: ALWAYS fetch live status from Dr. Green API for data integrity
+    // Skip for local-only clients (API registration failed)
+    if (localRecord.drgreen_client_id && !localRecord.drgreen_client_id.startsWith('local-')) {
+      try {
+        console.log('[ShopContext] Fetching live client status from Dr. Green API...');
+        const { data: apiResponse, error: apiError } = await supabase.functions.invoke('drgreen-proxy', {
+          body: {
+            action: 'get-client',
+            clientId: localRecord.drgreen_client_id,
+          },
+        });
+
+        // Accept response with or without "success" wrapper
+        const liveData = apiResponse?.data || apiResponse;
+        if (!apiError && liveData && (liveData.isKYCVerified !== undefined || liveData.adminApproval !== undefined)) {
+          const liveKyc = liveData.isKYCVerified ?? liveData.is_kyc_verified ?? false;
+          const liveApproval = liveData.adminApproval ?? liveData.admin_approval ?? 'PENDING';
+          const liveKycLink = liveData.kycLink ?? liveData.kyc_link ?? null;
+
+          // Update local cache if status changed (fire-and-forget)
+          if (
+            localRecord.is_kyc_verified !== liveKyc ||
+            localRecord.admin_approval !== liveApproval ||
+            localRecord.kyc_link !== liveKycLink
+          ) {
+            console.log('[ShopContext] Status changed on Dr. Green, updating local cache...');
+            supabase
+              .from('drgreen_clients')
+              .update({
+                is_kyc_verified: liveKyc,
+                admin_approval: liveApproval,
+                kyc_link: liveKycLink,
+                updated_at: new Date().toISOString(),
+              })
+              .eq('user_id', user.id)
+              .then(({ error: updateErr }) => {
+                if (updateErr) console.error('[ShopContext] Cache update error:', updateErr);
+              });
+          }
+
+          // Always use live data for the UI state
+          setDrGreenClient({
+            ...localRecord,
+            is_kyc_verified: liveKyc,
+            admin_approval: liveApproval,
+            kyc_link: liveKycLink,
+          });
+          setIsLoading(false);
+          return;
+        } else {
+          console.warn('[ShopContext] Could not fetch live status, falling back to cached data');
+        }
+      } catch (err) {
+        console.warn('[ShopContext] API call failed, using cached data:', err);
+      }
+    }
+
+    // Fallback: use cached local data if API call fails
+    setDrGreenClient(localRecord);
+    setIsLoading(false);
+  }, [linkClientFromDrGreenByAuthEmail]);
 
   const refreshClient = useCallback(async () => {
     await fetchClient();
@@ -356,20 +345,9 @@ export function ShopProvider({ children }: { children: React.ReactNode }) {
     fetchCart();
     fetchClient();
 
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((event) => {
-      // Defer to avoid auth lock contention (Supabase known deadlock pattern)
-      setTimeout(() => {
-        // On SIGNED_OUT or stale token, clear state immediately
-        if (event === 'SIGNED_OUT' || event === 'TOKEN_REFRESHED') {
-          if (event === 'SIGNED_OUT') {
-            setDrGreenClient(null);
-            setCart([]);
-            return;
-          }
-        }
-        fetchCart();
-        fetchClient();
-      }, 0);
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(() => {
+      fetchCart();
+      fetchClient();
     });
 
     return () => subscription.unsubscribe();

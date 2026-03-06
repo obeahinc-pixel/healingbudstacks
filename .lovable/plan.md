@@ -1,47 +1,46 @@
 
 
-# Plan: Fix 401 Errors, Sync Data, and Resolve Regression
+# Dead Code Audit Results
 
-## Root Cause Analysis
+## Confirmed Dead Code (Safe to Remove)
 
-The regression has **three distinct causes**:
+### 1. `src/hooks/useWalletAuth.ts` -- DEAD HOOK
+Zero imports anywhere in the codebase. Not referenced by any component or page.
 
-1. **`get-orders` returns 404**: The proxy calls `/dapp/clients/{clientId}/orders` which does NOT exist in the Dr. Green API. The correct endpoint is `/dapp/orders` with query params. Edge function logs confirm repeated `Response status: 404` for every `get-orders` call. This breaks the patient dashboard order history.
+### 2. `src/components/shop/GeneratedProductImage.tsx` + `src/hooks/useGeneratedImage.ts` -- DEAD COMPONENT + HOOK
+`GeneratedProductImage` is never imported outside its own file. `useGeneratedImage` is only imported by `GeneratedProductImage`. Both are dead.
 
-2. **Admin dashboard 401s on summary endpoints**: `dashboard-summary`, `sales-summary`, `get-clients-summary` are called but don't exist in the Dr. Green API. These were already partially fixed in previous iterations but may still be called from other components.
+### 3. `src/components/admin/SalesDashboard.tsx` -- DEAD COMPONENT
+Never imported or rendered anywhere. Exports `SalesDashboard` but no file references it.
 
-3. **Data desync**: The `sync-drgreen-data` function works (just confirmed -- 11 clients, 4 orders fetched) but only 4 clients were upserted (those with matching local auth accounts). Orders returned 0 upserts because the order `clientId` maps to Dr. Green client IDs, and the `clientToUser` lookup only found matches for locally-linked clients. The single existing local order has `drgreen_order_id = LOCAL-20260210` which doesn't match any API order ID.
+### 4. `src/components/ProtectedNFTRoute.tsx` -- DEAD COMPONENT (imported but unused)
+Imported in `App.tsx` but never used in any `<Route>`. The import can be removed from `App.tsx` and the file deleted.
 
-## Current State (Just Verified)
+### 5. `supabase/functions/prescription-expiry-check/` -- DEAD EDGE FUNCTION
+Zero references in `src/`. Only exists in `config.toml`. No frontend or backend code invokes it.
 
-- **`healingbudsglobal@gmail.com`** exists as admin -- confirmed working
-- **`scott@healingbuds.global`** admin role removed -- confirmed
-- **11 clients** on Dr. Green API, **4 linked locally** (scott.k1, kayliegh.sm, motester, scott@healingbuds.global)
-- **4 orders** on Dr. Green API, **1 local order** (unlinked, local-only ID)
-- **sync-drgreen-data** Edge Function deployed and operational
+### 6. `supabase/functions/upload-email-logo/` -- DEAD EDGE FUNCTION
+Zero references in `src/`. Never invoked by any component.
 
-## Implementation Steps
+## Changes
 
-### 1. Fix `get-orders` action in drgreen-proxy (Root cause of 404)
-Change the `get-orders` case from calling the non-existent `/dapp/clients/{clientId}/orders` to calling `/dapp/orders` with a `clientIds` query parameter filter (same pattern as `dapp-orders` admin action).
+| Action | File |
+|--------|------|
+| Delete | `src/hooks/useWalletAuth.ts` |
+| Delete | `src/hooks/useGeneratedImage.ts` |
+| Delete | `src/components/shop/GeneratedProductImage.tsx` |
+| Delete | `src/components/admin/SalesDashboard.tsx` |
+| Delete | `src/components/ProtectedNFTRoute.tsx` |
+| Delete | `supabase/functions/prescription-expiry-check/` |
+| Delete | `supabase/functions/upload-email-logo/` |
+| Edit | `src/App.tsx` -- remove `ProtectedNFTRoute` import (line 16) |
+| Edit | `supabase/config.toml` -- remove `[functions.prescription-expiry-check]` and `[functions.upload-email-logo]` blocks |
 
-**File**: `supabase/functions/drgreen-proxy/index.ts` (lines ~3120-3131)
+## Not Dead (Confirmed Active)
+All other hooks, utilities, components, and edge functions have active import chains and are in use. No further removals recommended.
 
-### 2. Fix `get-client-orders` action (if present)
-Check if `get-client-orders` in `useDrGreenApi.ts` also uses a broken endpoint path and fix it similarly.
-
-### 3. Fix sync-drgreen-data order upsert logic
-The current logic skips orders when the client has no local `user_id`. Fix: for orders where the client exists in `drgreen_clients`, use that user's `user_id`. For orders where the client has no local account, create a placeholder mapping or skip gracefully with proper logging.
-
-### 4. Remove deprecated summary endpoint calls
-Search for any remaining calls to `getDashboardSummary`, `getSalesSummary`, `getClientsSummary` across the codebase and remove them. The dashboard was already partially fixed but there may be residual references.
-
-### 5. Trigger a full sync after fixes
-After deploying the proxy fix, call `sync-drgreen-data` to pull all 11 clients and 4 orders into the local database correctly.
-
-## Files Changed
-
-- `supabase/functions/drgreen-proxy/index.ts` -- fix `get-orders` endpoint path from `/dapp/clients/{id}/orders` to `/dapp/orders` with clientId filter
-- `supabase/functions/sync-drgreen-data/index.ts` -- improve order upsert to handle all 4 orders
-- `src/hooks/useDrGreenApi.ts` -- clean up deprecated summary methods, fix `getClientOrders` if broken
+## Impact
+- Removes ~7 dead files and 2 edge function deployments
+- Cleans one unused import from `App.tsx`
+- No functional change to the application
 

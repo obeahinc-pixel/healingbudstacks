@@ -14,19 +14,16 @@ serve(async (req) => {
   try {
     const { email, password, verify, action, userId } = await req.json();
 
-    const supabaseUrl = Deno.env.get("SUPABASE_URL");
-    const serviceRoleKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
-    
-    if (!supabaseUrl || !serviceRoleKey) {
-      throw new Error("Missing SUPABASE_URL or SUPABASE_SERVICE_ROLE_KEY");
-    }
-
-    const supabaseAdmin = createClient(supabaseUrl, serviceRoleKey, {
-      auth: {
-        autoRefreshToken: false,
-        persistSession: false,
-      },
-    });
+    const supabaseAdmin = createClient(
+      Deno.env.get("SUPABASE_URL")!,
+      Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!,
+      {
+        auth: {
+          autoRefreshToken: false,
+          persistSession: false,
+        },
+      }
+    );
 
     // Handle delete action
     if (action === 'delete' && userId) {
@@ -38,10 +35,6 @@ serve(async (req) => {
         JSON.stringify({ success: true, message: "User deleted successfully", userId }),
         { headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
-    }
-
-    if (!email) {
-      throw new Error("Email is required");
     }
 
     // Find user by email
@@ -57,7 +50,7 @@ serve(async (req) => {
     if (!user) {
       const { data: newUser, error: createError } = await supabaseAdmin.auth.admin.createUser({
         email,
-        password: password || "temp12345",
+        password,
         email_confirm: verify || false,
       });
       
@@ -79,10 +72,16 @@ serve(async (req) => {
       );
     }
 
-    // Update existing user
+    // Update existing user password and verification status
     const updateData: Record<string, unknown> = {};
-    if (password) updateData.password = password;
-    if (verify) updateData.email_confirm = true;
+    
+    if (password) {
+      updateData.password = password;
+    }
+    
+    if (verify) {
+      updateData.email_confirm = true;
+    }
 
     const { data: updatedUser, error: updateError } = await supabaseAdmin.auth.admin.updateUserById(
       user.id,

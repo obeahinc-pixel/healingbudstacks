@@ -31,7 +31,7 @@ Healing Buds uses a **two-track authentication model**:
 | 6 | `/auth/email/verify` | POST | Patient | COVERED | Supabase Auth email confirmation flow |
 | 7 | `/auth/email/resend` | POST | Patient | COVERED | Supabase Auth `resend` |
 | 8 | `/auth/signup` | POST | Patient | COVERED | Supabase Auth `signUp` |
-| 9 | `/auth/wallet/nonce` | GET | Admin | COVERED | SIWE message generation in `WalletContext` |
+| 9 | `/auth/wallet/nonce` | GET | Admin | COVERED | SIWE message generation in `useWalletAuth.ts` |
 | 10 | `/auth/wallet/verify` | POST | Admin | COVERED | `supabase/functions/wallet-auth/index.ts` |
 | 11 | `/auth/wallet/link` | POST | Admin | PARTIAL | `wallet_email_mappings` table exists; no multi-wallet per user |
 | 12 | `/auth/wallet/unlink` | DELETE | Admin | NEW | No unlinking endpoint |
@@ -71,7 +71,7 @@ These endpoints apply **only** to NFT holders with admin access. Patients must n
 
 | Endpoint | Notes |
 |----------|-------|
-| Wallet nonce (#9) | SIWE-style message generated client-side via `WalletContext` + `wallet-auth` edge function |
+| Wallet nonce (#9) | SIWE-style message generated client-side in `src/hooks/useWalletAuth.ts` |
 | Wallet verify (#10) | `supabase/functions/wallet-auth/index.ts` — full EIP-191 recovery + on-chain `balanceOf` NFT check against contract `0x217ddEad61a42369A266F1Fb754EB5d3EBadc88a` |
 | Admin list clients (#33) | `drgreen-proxy` with `production-write` environment routing for elevated permissions |
 | Admin get client (#34) | `drgreen-proxy` |
@@ -185,7 +185,7 @@ Ordered by compliance importance and user value:
 | `supabase/functions/wallet-auth/index.ts` | Admin wallet + SIWE + NFT verification |
 | `supabase/functions/drgreen-proxy/index.ts` | Backend proxy for all Dr. Green API calls |
 | `supabase/functions/drgreen-webhook/index.ts` | Inbound webhook handler (needs audit) |
-| `src/context/WalletContext.tsx` | Client-side wallet auth context (replaced `useWalletAuth.ts`) |
+| `src/hooks/useWalletAuth.ts` | Client-side wallet auth hook |
 | `src/hooks/useDrGreenApi.ts` | Client-side Dr. Green API hook |
 | `src/hooks/useDrGreenClientSync.ts` | Client sync between local DB and Dr. Green |
 | `src/pages/Auth.tsx` | Patient login/signup UI |
