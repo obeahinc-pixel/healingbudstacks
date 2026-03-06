@@ -30,8 +30,6 @@ interface ShopContextType {
   cart: CartItem[];
   cartCount: number;
   cartTotal: number;
-  /** @deprecated Use cartTotal — no conversion needed */
-  cartTotalConverted: number;
   isCartOpen: boolean;
   setIsCartOpen: (open: boolean) => void;
   addToCart: (item: Omit<CartItem, 'id'>) => Promise<void>;
